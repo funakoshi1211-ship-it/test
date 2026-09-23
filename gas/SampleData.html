@@ -1,0 +1,112 @@
+<script>
+/*
+ * 動作確認用のサンプルデータ（2026年8月）。氏名はすべて仮名。
+ * スプレッドシートにつながっていないとき（ローカルで開いたとき）に使う。
+ */
+var SAMPLE = (function () {
+  var stores = [
+    { code: '一', name: '一番町' }, { code: '三', name: '三番町' }, { code: '中', name: '中一万' },
+    { code: '山', name: '山越' }, { code: '松', name: '松山' }
+  ];
+  function req(store, wd, sat) {
+    // wd/sat: [午前薬, 午前事, 午後薬, 午後事]
+    return [
+      { store: store, dayType: '平日', slot: 'AM', pharm: wd[0], clerk: wd[1] },
+      { store: store, dayType: '平日', slot: 'PM', pharm: wd[2], clerk: wd[3] },
+      { store: store, dayType: '土曜', slot: 'AM', pharm: sat[0], clerk: sat[1] },
+      { store: store, dayType: '当番', slot: 'AM', pharm: 1, clerk: 0 },
+      { store: store, dayType: '当番', slot: 'PM', pharm: 1, clerk: 0 }
+    ];
+  }
+  var requirements = [].concat(
+    req('三', [3, 2, 2, 2], [2, 1]),
+    req('一', [1, 1, 1, 1], [1, 1]),
+    req('中', [2, 1, 2, 1], [2, 1]),
+    req('山', [1, 1, 1, 1], [2, 1]),
+    req('松', [2, 2, 2, 2], [2, 2])
+  );
+  var n = 0;
+  function st(name, job, kind, home, opt) {
+    opt = opt || {};
+    return {
+      id: 'S' + (++n), order: n, name: name, job: job, kind: kind, home: home,
+      fixed: !!opt.fixed, canStores: opt.can || [], night: !!opt.night, ngWeekdays: opt.ng || [],
+      weeklyMax: opt.max || null, weeklyStoreMax: opt.storeMax || null, weeklyRemote: opt.remote || 0,
+      endWeekday: opt.endWd || '', endSat: opt.endSat || ''
+    };
+  }
+  var staff = [
+    st('管薬A', '管薬', '常勤', '一', { fixed: true }),
+    st('管薬B', '管薬', '常勤', '三', { fixed: true, night: true }),
+    st('管薬C', '管薬', '常勤', '中', { fixed: true }),
+    st('管薬D', '管薬', '常勤', '山', { fixed: true }),
+    st('管薬E', '管薬', '常勤', '松', { fixed: true }),
+    st('薬剤師F', '薬', '常勤', '中', { can: ['山', '一'] }),
+    st('薬剤師G', '薬', '常勤', '三', { can: ['中'], night: true }),
+    st('薬剤師H', '薬', '常勤', '三', { can: ['中', '一'], night: true }),
+    st('薬剤師I', '薬', '常勤', '松', {}),
+    st('薬剤師J', '薬', '準常勤', '三', { can: ['松'], endWd: '16:15', endSat: '13:00' }),
+    st('薬剤師K', '薬', '非常勤', '松', { max: 2 }),
+    st('薬剤師L', '薬', '非常勤', '山', { max: 2 }),
+    st('薬剤師M', '薬', '非常勤', '山', { max: 2 }),
+    st('薬剤師N', '薬', '非常勤', '山', { can: ['松', '一'], max: 2 }),
+    st('薬剤師O', '薬', '非常勤', '中', { max: 2 }),
+    st('夜勤P', '薬', '外部', '三', { night: true }),
+    st('事務Q', '事務', '常勤', '三', { fixed: true }),
+    st('事務R', '事務', '常勤', '三', { fixed: true }),
+    st('事務S', '事務', '常勤', '一', {}),
+    st('事務T', '事務', '常勤', '松', {}),
+    st('事務U', '事務', '常勤', '松', {}),
+    st('事務V', '事務', '常勤', '山', { fixed: true }),
+    st('事務W', '事務', '常勤', '中', { fixed: true, storeMax: 4, remote: 1 }),
+    st('事務X', '事務', '非常勤', '中', { max: 3 }),
+    st('事務Y', '事務', '非常勤', '山', { max: 3 }),
+    st('事務Z', '事務', '非常勤', '松', { max: 3 })
+  ];
+  var master = {
+    stores: stores,
+    requirements: requirements,
+    staff: staff,
+    holidays: [{ date: '2026-08-11', name: '山の日' }],
+    extraOpen: [],
+    dutyDates: ['2026-08-01', '2026-08-09', '2026-08-17', '2026-08-25'],
+    specialPeriods: [{ name: 'お盆', start: '2026-08-12', end: '2026-08-15' }],
+    specialReqs: []
+  };
+
+  // 事前に決まっている枠（希望休・※など）
+  var R = {};
+  function put(id, dates, am, pm, night) {
+    dates.forEach(function (d) {
+      var date = '2026-08-' + (d < 10 ? '0' : '') + d;
+      R[id] = R[id] || {};
+      R[id][date] = { AM: am || '', PM: pm === undefined ? (am || '') : pm, N: night || '' };
+    });
+  }
+  put('S1', [3, 4, 17], '一', '※');
+  put('S1', [19, 26], '※', '※');
+  put('S1', [6, 20], '一', '重信');
+  put('S2', [12, 13, 14], '特休');
+  put('S3', [9, 10], '特休');
+  put('S4', [12, 13, 14], '有給');
+  put('S6', [5, 21], '休');
+  put('S7', [1], '有給');
+  put('S7', [26], '有給');
+  put('S8', [22, 24], '休');
+  put('S10', [5, 6, 7, 21], '有給');
+  put('S12', [4, 5, 6, 7, 10, 19], '×');
+  put('S14', [5, 6, 7, 8, 13, 14, 15, 17, 20, 21, 24, 28, 29], '×');
+  put('S15', [3, 4, 5, 6, 7, 10, 12, 13, 14, 17, 18, 19, 20, 21, 24, 25, 26, 27, 28], '×');
+  put('S16', [18, 26], '', '', '深夜');
+  put('S17', [13, 14], '有給');
+  put('S18', [6, 15], '特休');
+  put('S19', [5, 19, 26], '休');
+  put('S22', [12, 13, 14], '有給');
+  put('S22', [15], '特休');
+  put('S23', [10], '特休');
+  put('S24', [12, 13, 14, 15, 17], '×');
+
+  return { master: master, requests: R, ym: '2026-08' };
+})();
+if (typeof module !== 'undefined') module.exports = SAMPLE;
+</script>

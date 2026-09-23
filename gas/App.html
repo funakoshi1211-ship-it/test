@@ -1,0 +1,283 @@
+<script>
+(function () {
+  var L = ShiftLogic;
+  var DEMO = typeof google === 'undefined' || !google.script;
+  var S = {
+    ym: '', master: null, requests: {}, cells: {}, mode: 'shift', sel: null, both: true,
+    dirty: false, result: null, hlDate: null, hlId: null
+  };
+  var $ = function (id) { return document.getElementById(id); };
+  var WD = '日月火水木金土';
+  var OFF = L.OFF, AWAY = L.AWAY;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function clone(o) { return JSON.parse(JSON.stringify(o || {})); }
+  function toast(msg) { var t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove('show'); }, 2500); }
+  function status(msg) { $('status').textContent = msg || ''; }
+  function ymParts() { var p = S.ym.split('-'); return [+p[0], +p[1]]; }
+
+  // サーバー呼び出し（デモのときは手元のサンプルを使う）
+  function call(fn) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      if (!DEMO) {
+        var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+        r[fn].apply(r, args);
+        return;
+      }
+      if (fn === 'getData') {
+        var ym = args[0];
+        resolve({ ym: ym, master: clone(SAMPLE.master), requests: ym === SAMPLE.ym ? clone(SAMPLE.requests) : null, cells: null });
+      } else {
+        resolve(null);
+      }
+    });
+  }
+
+  // ---------- 読み込み・保存 ----------
+  function load() {
+    if (S.dirty && !confirm('保存していない変更があります。破棄して読み込みますか？')) { $('ym').value = S.ym; return; }
+    S.ym = $('ym').value;
+    status('読み込み中…');
+    call('getData', S.ym).then(function (d) {
+      S.master = d.master; S.requests = d.requests || {}; S.cells = d.cells || {};
+      S.dirty = false;
+      if (!S.master.staff.length) toast('「社員」シートに社員が登録されていません');
+      refresh();
+      status(d.cells ? '保存済みのシフトを読み込みました' : 'シフトは未作成です。「自動作成」を押してください');
+    }).catch(function (e) { status(''); alert('読み込みに失敗しました：' + (e && e.message || e)); });
+  }
+  function save() {
+    status('保存中…');
+    Promise.all([call('saveRequests', S.ym, S.requests), call('saveShift', S.ym, S.cells)]).then(function () {
+      S.dirty = false;
+      status(DEMO ? 'デモのため保存されません' : '保存しました');
+      toast(DEMO ? 'デモのため保存されません' : '保存しました');
+    }).catch(function (e) { status(''); alert('保存に失敗しました：' + (e && e.message || e)); });
+  }
+  function generate() {
+    var has = Object.keys(S.cells).some(function (id) { return Object.keys(S.cells[id]).some(function (d) { var c = S.cells[id][d]; return c.AM || c.PM || c.N; }); });
+    if (has && !confirm('今のシフトを消して、希望をもとに作り直します。よろしいですか？')) return;
+    var p = ymParts();
+    S.cells = L.generate(S.master, S.requests, p[0], p[1]);
+    S.dirty = true;
+    setMode('shift');
+    var errs = S.result.issues.filter(function (i) { return i.level === 'error'; }).length;
+    status('自動作成しました（要確認 ' + errs + '件）');
+  }
+  function printSheet() {
+    if (DEMO) { toast('デモでは印刷用シートを作れません'); return; }
+    status('印刷用シートを作成中…');
+    call('exportPrint', S.ym, S.cells).then(function (url) {
+      status('印刷用シートを作成しました');
+      window.open(url, '_blank');
+    }).catch(function (e) { status(''); alert('作成に失敗しました：' + (e && e.message || e)); });
+  }
+
+  // ---------- 入力 ----------
+  function paletteCodes() {
+    var stores = S.master ? S.master.stores.map(function (s) { return s.code; }) : [];
+    var codes = [{ g: '店舗', list: stores }, { g: '店舗外', list: AWAY }, { g: '休み', list: ['定休', '休', '有給', '特休', '×'] }, { g: '夜勤', list: ['準夜', '深夜'] }];
+    if (S.mode === 'req') codes.splice(1, 0, { g: '希望', list: ['出'] });
+    return codes;
+  }
+  function renderPalette() {
+    var h = '<span class="label">入力する記号：</span>';
+    paletteCodes().forEach(function (grp, gi) {
+      if (gi) h += '<span class="sep"></span>';
+      grp.list.forEach(function (c) { h += '<button data-code="' + esc(c) + '"' + (S.sel === c ? ' class="sel"' : '') + '>' + esc(c) + '</button>'; });
+    });
+    h += '<span class="sep"></span><button data-code="__clear"' + (S.sel === '__clear' ? ' class="sel"' : '') + '>消す</button>';
+    h += '<span class="sep"></span><label><input type="checkbox" id="both"' + (S.both ? ' checked' : '') + '> 午前・午後をまとめて入力</label>';
+    h += '<span class="label" style="margin-left:12px">' + (S.mode === 'req' ? '紙の希望を入力します。ここで入れた枠は自動作成で変更されません。' : 'セルを押すと選んだ記号が入ります。') + '</span>';
+    $('palette').innerHTML = h;
+  }
+  function onPalette(e) {
+    var b = e.target.closest('button[data-code]');
+    if (b) { S.sel = S.sel === b.dataset.code ? null : b.dataset.code; renderPalette(); return; }
+    if (e.target.id === 'both') S.both = e.target.checked;
+  }
+  function onGrid(e) {
+    var td = e.target.closest('td.cell');
+    if (!td) return;
+    if (!S.sel) { toast('上の記号を選んでからセルを押してください'); return; }
+    var id = td.dataset.id, date = td.dataset.date, row = td.dataset.row;
+    var map = S.mode === 'req' ? S.requests : S.cells;
+    map[id] = map[id] || {};
+    var c = map[id][date] = map[id][date] || { AM: '', PM: '', N: '' };
+    var code = S.sel;
+    if (code === '__clear') {
+      if (row === 'N') c.N = '';
+      else if (S.both) { c.AM = ''; c.PM = ''; }
+      else c[row] = '';
+    } else if (L.NIGHT.indexOf(code) >= 0) {
+      c.N = c.N === code ? '' : code;
+    } else if (row === 'N') {
+      toast('夜の行には「準夜」「深夜」だけを入れられます'); return;
+    } else if (S.both) {
+      c.AM = code; c.PM = code;
+    } else {
+      c[row] = c[row] === code ? '' : code;
+    }
+    if (!c.AM && !c.PM && !c.N) delete map[id][date];
+    S.dirty = true;
+    refresh();
+  }
+  function setMode(m) {
+    S.mode = m;
+    Array.prototype.forEach.call($('modeSeg').children, function (b) { b.classList.toggle('on', b.dataset.mode === m); });
+    document.body.classList.toggle('mode-req', m === 'req');
+    if (m === 'req' && S.sel && S.master && S.master.stores.some(function (s) { return s.code === S.sel; })) S.sel = null;
+    refresh();
+  }
+
+  // ---------- 表示 ----------
+  function cls(v) {
+    if (!v) return '';
+    if (S.master.stores.some(function (s) { return s.code === v; })) return 'v-' + v;
+    if (AWAY.indexOf(v) >= 0 || v === '出') return 'v-away';
+    if (OFF.indexOf(v) >= 0) return 'v-off';
+    return '';
+  }
+  function refresh() {
+    if (!S.master) return;
+    var p = ymParts();
+    S.result = L.validate(S.master, S.requests, S.cells, p[0], p[1]);
+    renderPalette();
+    renderGrid();
+    renderSide();
+  }
+  function renderGrid() {
+    var r = S.result, ctx = r.ctx, days = ctx.days;
+    var bad = {};
+    r.issues.forEach(function (i) { if (i.id && i.date) bad[i.id + '|' + i.date] = true; });
+    var h = '<thead><tr class="r1"><th class="sticky">氏名</th><th class="sticky2">区分</th>';
+    days.forEach(function (x) {
+      var c = [x.dow === 0 ? 'sun' : x.dow === 6 ? 'sat' : '', x.holiday ? 'hol' : '', x.duty ? 'duty' : '', x.special ? 'special' : '', S.hlDate === x.date ? 'hl' : ''].join(' ');
+      var title = [x.holiday, x.duty ? '夜間当番日' : '', x.special ? x.special.name : ''].filter(Boolean).join(' / ');
+      h += '<th class="' + c + '" title="' + esc(title) + '"><span>' + x.d + '</span></th>';
+    });
+    h += '</tr><tr class="r2"><th class="sticky"></th><th class="sticky2"></th>';
+    days.forEach(function (x) { h += '<th class="' + (x.dow === 0 || x.holiday ? 'sun' : x.dow === 6 ? 'sat' : '') + '">' + WD[x.dow] + '</th>'; });
+    h += '</tr></thead>';
+
+    // 人数の集計
+    h += '<tbody class="sum">';
+    var roles = [['pharm', '薬'], ['clerk', '事務']];
+    S.master.stores.forEach(function (st) {
+      roles.forEach(function (ro) {
+        L.SLOTS.forEach(function (k) {
+          h += '<tr><th class="sticky">' + esc(st.name) + ' ' + ro[1] + '</th><th class="sticky2">' + (k === 'AM' ? '午前' : '午後') + '</th>';
+          days.forEach(function (x) {
+            var c = r.counts[st.code][x.date][k][ro[0]];
+            if (!c) { h += '<td class="closed"></td>'; return; }
+            var cl = c.have < c.min ? (c.soft ? 'soft' : 'short') : 'okc';
+            h += '<td class="' + cl + '" title="' + c.have + '人 / 必要' + c.min + '人">' + c.have + '/' + c.min + '</td>';
+          });
+          h += '</tr>';
+        });
+      });
+    });
+    [['eve', 'eveNeed', '準夜 16-24'], ['late', 'lateNeed', '深夜 0-9']].forEach(function (n) {
+      h += '<tr><th class="sticky">夜間当番</th><th class="sticky2">' + n[2].split(' ')[0] + '</th>';
+      days.forEach(function (x) {
+        var c = r.night[x.date];
+        if (!c[n[1]] && !c[n[0]]) { h += '<td class="closed"></td>'; return; }
+        h += '<td class="' + (c[n[0]] < c[n[1]] ? 'short' : 'okc') + '">' + c[n[0]] + '/' + c[n[1]] + '</td>';
+      });
+      h += '</tr>';
+    });
+    h += '<tr class="gap"><td colspan="' + (days.length + 2) + '"></td></tr></tbody>';
+
+    // 社員
+    var view = S.mode === 'req' ? S.requests : S.cells;
+    h += '<tbody>';
+    ctx.staff.forEach(function (s) {
+      var rows = s.night ? ['AM', 'PM', 'N'] : ['AM', 'PM'];
+      rows.forEach(function (row, ri) {
+        var trc = row === 'PM' && !s.night ? 'pm' : row === 'N' ? 'nt pm' : '';
+        h += '<tr class="' + trc + '">';
+        if (ri === 0) {
+          var sub = [s.job, s.kind, s.fixed ? '固定' : ''].filter(Boolean).join('・');
+          h += '<th class="sticky' + (S.hlId === s.id ? ' hl' : '') + '" rowspan="' + rows.length + '" title="' + esc(sub) + '">' + esc(s.name) + '</th>';
+        }
+        h += '<th class="sticky2">' + (row === 'AM' ? '午前' : row === 'PM' ? '午後' : '夜') + '</th>';
+        days.forEach(function (x) {
+          var c = (view[s.id] && view[s.id][x.date]) || {};
+          var v = c[row] || '';
+          var rq = S.requests[s.id] && S.requests[s.id][x.date];
+          var classes = ['cell'];
+          if (row === 'N') { if (v) classes.push('v-night'); }
+          else {
+            classes.push(cls(v));
+            var open = s.home ? L.openKind(ctx, s.home, x.date, row) : true;
+            if (!v && !open) classes.push('closed');
+          }
+          if (S.mode === 'shift' && rq && rq[row]) classes.push('locked');
+          if (S.mode === 'shift' && bad[s.id + '|' + x.date]) classes.push('bad');
+          if (S.hlDate === x.date && (!S.hlId || S.hlId === s.id)) classes.push('hl');
+          var html;
+          if (row === 'N') html = v === '準夜' ? '準' : v === '深夜' ? '深' : '';
+          else {
+            html = esc(v);
+            var isSat = x.dow === 6, isStoreV = S.master.stores.some(function (t) { return t.code === v; });
+            var end = !isStoreV ? '' : (row === 'PM' && !isSat) ? s.endWeekday : (row === 'AM' && isSat) ? s.endSat : '';
+            if (end) html += '<small>~' + esc(end) + '</small>';
+          }
+          h += '<td class="' + classes.join(' ') + '" data-id="' + esc(s.id) + '" data-date="' + x.date + '" data-row="' + row + '">' + html + '</td>';
+        });
+        h += '</tr>';
+      });
+    });
+    h += '</tbody>';
+    $('grid').innerHTML = h;
+  }
+  function renderSide() {
+    var iss = S.result.issues;
+    var ne = iss.filter(function (i) { return i.level === 'error'; }).length, nw = iss.length - ne;
+    var h = '<h2>確認が必要なこと</h2><div class="counts"><span class="pill error">要対応 ' + ne + '</span><span class="pill warn">注意 ' + nw + '</span></div>';
+    if (!iss.length) h += '<p>問題は見つかりませんでした。</p>';
+    iss.slice(0, 300).forEach(function (i, n) {
+      var d = i.date ? (+i.date.slice(5, 7)) + '/' + (+i.date.slice(8, 10)) : '';
+      h += '<div class="issue ' + i.level + '" data-n="' + n + '"><span class="d">' + d + '</span>' + esc(i.msg) + '</div>';
+    });
+    if (iss.length > 300) h += '<p>ほか ' + (iss.length - 300) + ' 件</p>';
+    h += '<div class="legend"><b>表の見方</b><br>' +
+      '数字の行：配置人数 / 必要人数（赤＝不足、黄＝特別期間の不足）<br>' +
+      '茶色の枠：希望入力で決まっている枠（自動作成で変わらない）<br>' +
+      '赤い枠：その日にルール違反がある<br>' +
+      '日付が黒：夜間当番日　黄色の日付：特別期間<br>' +
+      '<b>記号</b>　※・重信：出勤扱いで店舗にいない　在宅：在宅勤務　明：深夜勤明け　出：出勤希望（非常勤）</div>';
+    $('side').innerHTML = h;
+  }
+  function onSide(e) {
+    var d = e.target.closest('.issue');
+    if (!d) return;
+    var i = S.result.issues[+d.dataset.n];
+    S.hlDate = i.date; S.hlId = i.id;
+    renderGrid();
+    var cell = document.querySelector('#grid td.hl, #grid th.hl');
+    if (cell) cell.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+  }
+
+  // ---------- 起動 ----------
+  function init() {
+    var now = new Date();
+    var next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    $('ym').value = DEMO ? SAMPLE.ym : next.getFullYear() + '-' + ('0' + (next.getMonth() + 1)).slice(-2);
+    $('demo').hidden = !DEMO;
+    $('btnLoad').onclick = load;
+    $('ym').onchange = load;
+    $('btnGen').onclick = generate;
+    $('btnSave').onclick = save;
+    $('btnPrint').onclick = printSheet;
+    $('modeSeg').onclick = function (e) { var b = e.target.closest('button'); if (b) setMode(b.dataset.mode); };
+    $('palette').onclick = onPalette;
+    $('grid').onclick = onGrid;
+    $('side').onclick = onSide;
+    window.addEventListener('beforeunload', function (e) { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
+    load();
+  }
+  init();
+})();
+</script>

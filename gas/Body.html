@@ -1,0 +1,20 @@
+<header>
+  <h1>シフト作成</h1>
+  <input type="month" id="ym">
+  <button id="btnLoad">読み込み</button>
+  <span class="seg" id="modeSeg">
+    <button data-mode="req">① 希望入力</button>
+    <button data-mode="shift" class="on">② シフト</button>
+  </span>
+  <button id="btnGen" class="primary">自動作成</button>
+  <button id="btnSave">保存</button>
+  <button id="btnPrint">印刷用シート</button>
+  <span class="status" id="status"></span>
+</header>
+<div class="demo" id="demo" hidden>デモ表示中です（仮名のサンプルデータ・2026年8月）。スプレッドシートには保存されません。</div>
+<div class="palette" id="palette"></div>
+<main>
+  <div class="gridwrap" id="gridwrap"><table class="grid" id="grid"></table></div>
+  <aside id="side"></aside>
+</main>
+<div class="toast" id="toast"></div>
