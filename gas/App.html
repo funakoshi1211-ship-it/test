@@ -98,6 +98,8 @@
     if (e.target.id === 'both') S.both = e.target.checked;
   }
   function onGrid(e) {
+    var nm = e.target.closest('th[data-staff]');
+    if (nm) { openStaff(nm.dataset.staff); return; }
     var td = e.target.closest('td.cell');
     if (!td) return;
     if (!S.sel) { toast('上の記号を選んでからセルを押してください'); return; }
@@ -199,7 +201,9 @@
         h += '<tr class="' + trc + '">';
         if (ri === 0) {
           var sub = [s.job, s.kind, s.fixed ? '固定' : ''].filter(Boolean).join('・');
-          h += '<th class="sticky' + (S.hlId === s.id ? ' hl' : '') + '" rowspan="' + rows.length + '" title="' + esc(sub) + '">' + esc(s.name) + '</th>';
+          var note = s.kind === '非常勤' && s.weeklyMax ? '週' + s.weeklyMax + '日まで' : s.fixed ? '固定' : '';
+          h += '<th class="sticky name' + (S.hlId === s.id ? ' hl' : '') + '" rowspan="' + rows.length + '" data-staff="' + esc(s.id) + '" title="' + esc(sub) + '（押すと設定を変更）">' +
+            esc(s.name) + (note ? '<small>' + esc(note) + '</small>' : '') + '</th>';
         }
         h += '<th class="sticky2">' + (row === 'AM' ? '午前' : row === 'PM' ? '午後' : '夜') + '</th>';
         days.forEach(function (x) {
@@ -247,7 +251,9 @@
       '茶色の枠：希望入力で決まっている枠（自動作成で変わらない）<br>' +
       '赤い枠：その日にルール違反がある<br>' +
       '日付が黒：夜間当番日　黄色の日付：特別期間<br>' +
-      '<b>記号</b>　※・重信：出勤扱いで店舗にいない　在宅：在宅勤務　明：深夜勤明け　出：出勤希望（非常勤）</div>';
+      '<b>記号</b>　※・重信：出勤扱いで店舗にいない　在宅：在宅勤務　入：深夜勤の前日の午後（勤務なし）　明：深夜勤明け　出：出勤希望（非常勤）<br>' +
+      '<b>休み</b>　定休・休は週2日の公休。有給・特休（お盆など）は公休とは別に取る<br>' +
+      '<b>社員の設定</b>　氏名を押すと、週の出勤上限などを変更できます</div>';
     $('side').innerHTML = h;
   }
   function onSide(e) {
@@ -258,6 +264,52 @@
     renderGrid();
     var cell = document.querySelector('#grid td.hl, #grid th.hl');
     if (cell) cell.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+  }
+
+  // ---------- 社員の設定 ----------
+  function openStaff(id) {
+    var s = S.master.staff.filter(function (x) { return x.id === id; })[0];
+    if (!s) return;
+    var stores = S.master.stores;
+    var f = $('staffForm');
+    f.dataset.id = id;
+    $('sfName').textContent = s.name + '（' + s.job + '）';
+    f.kind.value = s.kind || '常勤';
+    f.home.innerHTML = stores.map(function (t) { return '<option value="' + esc(t.code) + '">' + esc(t.name) + '</option>'; }).join('');
+    f.home.value = s.home;
+    f.fixed.checked = !!s.fixed;
+    f.night.checked = !!s.night;
+    $('sfCan').innerHTML = stores.map(function (t) {
+      return '<label><input type="checkbox" name="can" value="' + esc(t.code) + '"' + ((s.canStores || []).indexOf(t.code) >= 0 ? ' checked' : '') + '>' + esc(t.name) + '</label>';
+    }).join('');
+    $('sfNg').innerHTML = WD.split('').map(function (w, i) {
+      return '<label><input type="checkbox" name="ng" value="' + i + '"' + ((s.ngWeekdays || []).indexOf(i) >= 0 ? ' checked' : '') + '>' + w + '</label>';
+    }).join('');
+    f.weeklyMax.value = s.weeklyMax || '';
+    f.weeklyStoreMax.value = s.weeklyStoreMax || '';
+    f.weeklyRemote.value = s.weeklyRemote || '';
+    $('staffDlg').showModal();
+  }
+  function saveStaffForm(e) {
+    e.preventDefault();
+    var f = $('staffForm');
+    var s = S.master.staff.filter(function (x) { return x.id === f.dataset.id; })[0];
+    function num(v) { return v === '' ? null : Math.max(0, +v); }
+    s.kind = f.kind.value;
+    s.home = f.home.value;
+    s.fixed = f.fixed.checked;
+    s.night = f.night.checked;
+    s.canStores = Array.prototype.map.call(f.querySelectorAll('input[name=can]:checked'), function (i) { return i.value; })
+      .filter(function (c) { return c !== s.home; });
+    s.ngWeekdays = Array.prototype.map.call(f.querySelectorAll('input[name=ng]:checked'), function (i) { return +i.value; });
+    s.weeklyMax = num(f.weeklyMax.value);
+    s.weeklyStoreMax = num(f.weeklyStoreMax.value);
+    s.weeklyRemote = num(f.weeklyRemote.value) || 0;
+    $('staffDlg').close();
+    refresh();
+    call('saveStaff', s).then(function () {
+      toast(DEMO ? '設定を変えました（デモのため保存されません）' : s.name + 'さんの設定を保存しました');
+    }).catch(function (err) { alert('設定の保存に失敗しました：' + (err && err.message || err)); });
   }
 
   // ---------- 起動 ----------
@@ -275,6 +327,8 @@
     $('palette').onclick = onPalette;
     $('grid').onclick = onGrid;
     $('side').onclick = onSide;
+    $('staffForm').onsubmit = saveStaffForm;
+    $('sfCancel').onclick = function () { $('staffDlg').close(); };
     window.addEventListener('beforeunload', function (e) { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
     load();
   }

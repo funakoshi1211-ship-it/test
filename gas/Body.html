@@ -17,4 +17,21 @@
   <div class="gridwrap" id="gridwrap"><table class="grid" id="grid"></table></div>
   <aside id="side"></aside>
 </main>
+<dialog id="staffDlg">
+  <form id="staffForm">
+    <h2>社員の設定：<span id="sfName"></span></h2>
+    <div class="frow"><label>区分</label>
+      <select name="kind"><option>常勤</option><option>準常勤</option><option>非常勤</option><option>外部</option></select></div>
+    <div class="frow"><label>所属店舗</label><select name="home"></select>
+      <label class="inline"><input type="checkbox" name="fixed"> 所属店舗に固定</label></div>
+    <div class="frow"><label>応援できる店舗</label><span class="checks" id="sfCan"></span></div>
+    <div class="frow"><label>夜勤</label><label class="inline"><input type="checkbox" name="night"> 夜勤ができる</label></div>
+    <div class="frow"><label>出勤できない曜日</label><span class="checks" id="sfNg"></span></div>
+    <div class="frow"><label>週の出勤上限</label><input type="number" name="weeklyMax" min="0" max="7" placeholder="非常勤の上限（空欄＝3日）"> 日</div>
+    <div class="frow"><label>週の店舗出勤上限</label><input type="number" name="weeklyStoreMax" min="0" max="7" placeholder="空欄＝上限なし"> 日</div>
+    <div class="frow"><label>週の在宅日数</label><input type="number" name="weeklyRemote" min="0" max="7" placeholder="0"> 日</div>
+    <p class="hint">半日の勤務も1日として数えます。</p>
+    <div class="factions"><button type="button" id="sfCancel">キャンセル</button><button type="submit" class="primary">保存</button></div>
+  </form>
+</dialog>
 <div class="toast" id="toast"></div>

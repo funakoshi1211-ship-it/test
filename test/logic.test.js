@@ -55,4 +55,23 @@ t('手で違反を作ると判定で検出できる', () => {
   assert.ok(v2.issues.some(i => i.msg.includes('固定配置')));
   assert.ok(v2.issues.some(i => i.msg.includes('夜勤できない')));
 });
+t('深夜勤の前日は午前だけ（午後は「入」）', () => {
+  for (const d of M.dutyDates) {
+    const nd = L.addDays(d, 1);
+    const p = M.staff.find(s => cells[s.id][nd] && cells[s.id][nd].N === '深夜');
+    if (!p || !cells[p.id][d]) continue;
+    assert.ok(!stores.includes(cells[p.id][d].PM), p.name + ' ' + d + ' PM=' + cells[p.id][d].PM);
+  }
+});
+t('有給・特休は公休（週2日）とは別に取る', () => {
+  // 管薬D は 8/12-14 が有給。同じ週に公休（日曜＋1日）が別にある
+  const d = M.staff.find(s => s.name === '管薬D');
+  const wk = ['2026-08-09', '2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15'];
+  const rest = wk.filter(x => { const c = cells[d.id][x]; return !stores.includes(c.AM) && !stores.includes(c.PM) && !['有給', '特休'].includes(c.AM) && !c.N; }).length;
+  assert.ok(rest >= 2, 'rest=' + rest);
+});
+t('非常勤は週の出勤上限を超えない', () => {
+  const bad = v.issues.filter(i => i.msg.includes('日出勤（上限'));
+  assert.strictEqual(bad.length, 0, JSON.stringify(bad));
+});
 console.log(ok + ' passed');

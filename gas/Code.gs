@@ -214,6 +214,25 @@ function writeCells_(key, ym, map) {
   }
 }
 
+// 社員の設定（画面から変更した項目だけ書き戻す）
+function saveStaff(s) {
+  var sh = SpreadsheetApp.getActive().getSheetByName(SHEETS.staff.name);
+  var last = sh.getLastRow();
+  if (last < 2) throw new Error('「社員」シートに社員がいません');
+  var keys = sh.getRange(2, 1, last - 1, 2).getValues();
+  for (var i = 0; i < keys.length; i++) {
+    if ((str_(keys[i][0]) || str_(keys[i][1])) !== s.id) continue;
+    var row = [
+      s.kind, s.home, s.fixed ? '○' : '', (s.canStores || []).join(''), s.night ? '○' : '',
+      (s.ngWeekdays || []).map(function (n) { return WEEKDAYS.charAt(n); }).join(''),
+      s.weeklyMax == null ? '' : s.weeklyMax, s.weeklyStoreMax == null ? '' : s.weeklyStoreMax, s.weeklyRemote || ''
+    ];
+    sh.getRange(i + 2, 4, 1, row.length).setValues([row]);
+    return true;
+  }
+  throw new Error('社員が見つかりません：' + s.id);
+}
+
 // ---------- 印刷用シート ----------
 function exportPrint(ym, cells) {
   var data = getData(ym);
