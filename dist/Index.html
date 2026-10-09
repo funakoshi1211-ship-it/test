@@ -99,6 +99,8 @@
   .grid td.tally.under { background: var(--warn-bg); color: var(--warn); }
   .grid td.tally.over { background: #e8f0fe; color: var(--accent); }
   .grid th.partclosed span { text-decoration: underline dotted var(--err); }
+  .grid td.cell.txt { font-size: 9px; white-space: normal; line-height: 1.1; max-width: 46px; }
+  #noteText { width: 100%; font: inherit; padding: 6px; border: 1px solid var(--line-strong); border-radius: 6px; margin-bottom: 12px; }
 </style>
 
 </head>
@@ -113,7 +115,9 @@
   </span>
   <button id="btnGen" class="primary">自動作成</button>
   <button id="btnSave">保存</button>
+  <button id="btnNote">備考</button>
   <button id="btnPrint">印刷用シート</button>
+  <button id="btnPdf">印刷（PDF・A3横）</button>
   <span class="status" id="status"></span>
 </header>
 <div class="demo" id="demo" hidden>デモ表示中です（仮名のサンプルデータ・2026年8月）。スプレッドシートには保存されません。</div>
@@ -138,6 +142,13 @@
     <div class="frow"><label>週の在宅日数</label><input type="number" name="weeklyRemote" min="0" max="7" placeholder="0"> 日</div>
     <p class="hint">半日の勤務も1日として数えます。</p>
     <div class="factions"><button type="button" id="sfCancel">キャンセル</button><button type="submit" class="primary">保存</button></div>
+  </form>
+</dialog>
+<dialog id="noteDlg">
+  <form id="noteForm">
+    <h2>備考（印刷用シートの下に出ます）</h2>
+    <textarea id="noteText" rows="8" placeholder="例：事務（常勤）川又 8/12-14（有給）、15（お盆）"></textarea>
+    <div class="factions"><button type="button" id="noteCancel">キャンセル</button><button type="submit" class="primary">決定</button></div>
   </form>
 </dialog>
 <div class="toast" id="toast"></div>
@@ -176,7 +187,14 @@ var ShiftLogic = (function () {
   function dow(s) { var p = parts(s); return new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay(); }
   function daysInMonth(y, m) { return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
 
-  function isStore(ctx, v) { return !!ctx.storeSet[v]; }
+  // 店舗の記号。手入力の「三 8:30-14:30」のように、先頭が店舗記号の文字もその店舗として数える
+  function storeOf(ctx, v) {
+    if (!v) return null;
+    if (ctx.storeSet[v]) return v;
+    var head = String(v).charAt(0);
+    return String(v).length > 1 && ctx.storeSet[head] ? head : null;
+  }
+  function isStore(ctx, v) { return !!storeOf(ctx, v); }
   function roleOf(s) { return s.job === '事務' ? 'clerk' : 'pharm'; }
   function isRegular(s) { return s.kind === '常勤' || s.kind === '準常勤'; }
   function isExternal(s) { return s.kind === '外部'; }
@@ -287,7 +305,8 @@ var ShiftLogic = (function () {
   function isWorkingCell(ctx, c) {
     if (!c) return false;
     if (c.N) return true;
-    return SLOTS.some(function (k) { return isStore(ctx, c[k]) || AWAY.indexOf(c[k]) >= 0; });
+    // 店舗・※・重信・在宅のほか、手入力の文字（「研修」など）も出勤として数える
+    return SLOTS.some(function (k) { var v = c[k]; return !!v && OFF.indexOf(v) < 0 && v !== WANT; });
   }
   // 有給・特休の日（公休には数えない）
   function isLeaveDay(ctx, c) {
@@ -300,7 +319,7 @@ var ShiftLogic = (function () {
     ctx.staff.forEach(function (s) {
       if (roleOf(s) !== role) return;
       var c = peek(cells, s.id, date);
-      if (c && c[slot] === store) n++;
+      if (c && storeOf(ctx, c[slot]) === store) n++;
     });
     return n;
   }
@@ -833,15 +852,15 @@ var ShiftLogic = (function () {
         if (streak === MAX_STREAK + 1) add('error', s.name + '：' + (MAX_STREAK + 1) + '連勤以上', s.id, x.date);
 
         SLOTS.forEach(function (k) {
-          var v = c[k];
-          if (isStore(ctx, v)) {
+          var raw = c[k], v = storeOf(ctx, raw);
+          if (v) {
             if (!openKind(ctx, v, x.date, k)) add('error', s.name + '：' + storeName[v] + 'は' + slotName[k] + '営業していません', s.id, x.date);
             if (s.fixed && v !== s.home) add('warn', s.name + '：固定配置（' + storeName[s.home] + '）以外の店舗です', s.id, x.date);
             else if (allowedStores(s).indexOf(v) < 0) add('warn', s.name + '：' + storeName[v] + 'は出勤できる店舗に入っていません', s.id, x.date);
             if (c.N === '深夜') add('error', s.name + '：深夜勤（0-9）の日に日中勤務があります', s.id, x.date);
           }
           var rv = reqVal(R, s.id, x.date, k);
-          if (rv && rv !== WANT && rv !== v) add('warn', s.name + '：希望（' + rv + '）と違います', s.id, x.date);
+          if (rv && rv !== WANT && rv !== raw) add('warn', s.name + '：希望（' + rv + '）と違います', s.id, x.date);
           if (rv === WANT && !isStore(ctx, v)) add('warn', s.name + '：出勤希望の日に入っていません', s.id, x.date);
         });
         var rn = reqVal(R, s.id, x.date, 'N');
@@ -1068,6 +1087,7 @@ if (typeof module !== 'undefined') module.exports = SAMPLE;
     call('getData', S.ym).then(function (d) {
       S.master = d.master; S.requests = d.requests || {}; S.cells = d.cells || {};
       S.version = d.version || null;
+      S.note = d.note || '';
       S.dirty = false;
       if (!S.master.staff.length) toast('「社員」シートに社員が登録されていません');
       refresh();
@@ -1076,7 +1096,7 @@ if (typeof module !== 'undefined') module.exports = SAMPLE;
   }
   function save(force) {
     status('保存中…');
-    call('saveMonth', S.ym, S.requests, S.cells, S.version ? S.version.id : '', !!force).then(function (r) {
+    call('saveMonth', S.ym, S.requests, S.cells, S.version ? S.version.id : '', !!force, S.note || '').then(function (r) {
       if (r && r.conflict) {
         status('');
         var who = (r.by || '別の人') + '（' + r.at + '）';
@@ -1100,14 +1120,21 @@ if (typeof module !== 'undefined') module.exports = SAMPLE;
     var errs = S.result.issues.filter(function (i) { return i.level === 'error'; }).length;
     status('自動作成しました（要確認 ' + errs + '件）');
   }
-  function printSheet() {
+  function printSheet(asPdf) {
     if (DEMO) { toast('デモでは印刷用シートを作れません'); return; }
+    if (S.dirty && !confirm('保存していない変更があります。画面の内容で印刷用シートを作りますか？（保存は別に押してください）')) return;
+    // ポップアップが止められないよう、押したときに先にウィンドウを開いておく
+    var w = window.open('', '_blank');
+    if (w) w.document.write('<p style="font-family:sans-serif">印刷用シートを作成中です…</p>');
     status('印刷用シートを作成中…');
-    call('exportPrint', S.ym, S.cells).then(function (url) {
+    call('exportPrint', S.ym, S.cells, S.note || '').then(function (r) {
       status('印刷用シートを作成しました');
-      window.open(url, '_blank');
-    }).catch(function (e) { status(''); alert('作成に失敗しました：' + (e && e.message || e)); });
+      var url = asPdf ? r.pdf : r.sheet;
+      if (w) w.location.href = url; else window.open(url, '_blank');
+      if (asPdf) toast('PDFが開いたら、ブラウザの印刷（⌘+P）で印刷してください');
+    }).catch(function (e) { if (w) w.close(); status(''); alert('作成に失敗しました：' + (e && e.message || e)); });
   }
+
 
   // ---------- 入力 ----------
   function paletteCodes() {
@@ -1123,6 +1150,7 @@ if (typeof module !== 'undefined') module.exports = SAMPLE;
       grp.list.forEach(function (c) { h += '<button data-code="' + esc(c) + '"' + (S.sel === c ? ' class="sel"' : '') + '>' + esc(c) + '</button>'; });
     });
     h += '<span class="sep"></span><button data-code="__clear"' + (S.sel === '__clear' ? ' class="sel"' : '') + '>消す</button>';
+    h += '<button data-code="__text"' + (S.sel === '__text' ? ' class="sel"' : '') + ' title="セルを押すと文字を自由に入力できます（ダブルクリックでも可）">✎ 手入力</button>';
     h += '<span class="sep"></span><label><input type="checkbox" id="both"' + (S.both ? ' checked' : '') + '> 午前・午後をまとめて入力</label>';
     h += '<span class="label" style="margin-left:12px">' + (S.mode === 'req' ? '紙の希望を入力します。ここで入れた枠は自動作成で変更されません。' : 'セルを押すと選んだ記号が入ります。') + '</span>';
     $('palette').innerHTML = h;
@@ -1132,12 +1160,34 @@ if (typeof module !== 'undefined') module.exports = SAMPLE;
     if (b) { S.sel = S.sel === b.dataset.code ? null : b.dataset.code; renderPalette(); return; }
     if (e.target.id === 'both') S.both = e.target.checked;
   }
+  // 自由な文字の手入力。先頭が店舗記号なら、その店舗の人数として数える（例：「三 8:30-14:30」）
+  function typeIn(td) {
+    var id = td.dataset.id, date = td.dataset.date, row = td.dataset.row;
+    if (row === 'N') { toast('夜の行には「準夜」「深夜」の記号を使ってください'); return; }
+    var map = S.mode === 'req' ? S.requests : S.cells;
+    var cur = (map[id] && map[id][date] && map[id][date][row]) || '';
+    var v = prompt('入力する文字（空にすると消えます）\n例：三 8:30-14:30 ／ 中 ラスト ／ 研修 ／ 定休\n※先頭を店舗の記号にすると、その店舗の人数に数えます', cur);
+    if (v === null) return;
+    v = v.trim();
+    map[id] = map[id] || {};
+    var c = map[id][date] = map[id][date] || { AM: '', PM: '', N: '' };
+    c[row] = v;
+    if (!c.AM && !c.PM && !c.N) delete map[id][date];
+    S.dirty = true;
+    refresh();
+  }
   function onGrid(e) {
     var nm = e.target.closest('th[data-staff]');
     if (nm) { openStaff(nm.dataset.staff); return; }
     var td = e.target.closest('td.cell');
     if (!td) return;
-    if (!S.sel) { toast('上の記号を選んでからセルを押してください'); return; }
+    if (S.sel === '__text') { typeIn(td); return; }
+    if (!S.sel) {
+      // ダブルクリック（手入力）の1回目では案内を出さない
+      clearTimeout(S.hintTimer);
+      S.hintTimer = setTimeout(function () { toast('上の記号を選ぶか、セルをダブルクリックして手入力してください'); }, 350);
+      return;
+    }
     var id = td.dataset.id, date = td.dataset.date, row = td.dataset.row;
     var map = S.mode === 'req' ? S.requests : S.cells;
     map[id] = map[id] || {};
@@ -1172,9 +1222,11 @@ if (typeof module !== 'undefined') module.exports = SAMPLE;
   function cls(v) {
     if (!v) return '';
     if (S.master.stores.some(function (s) { return s.code === v; })) return 'v-' + v;
+    var head = v.charAt(0);
+    if (v.length > 1 && S.master.stores.some(function (s) { return s.code === head; })) return 'v-' + head + ' txt';
     if (AWAY.indexOf(v) >= 0 || v === '出') return 'v-away';
     if (OFF.indexOf(v) >= 0) return 'v-off';
-    return '';
+    return 'v-away txt';
   }
   function refresh() {
     if (!S.master) return;
@@ -1306,7 +1358,9 @@ if (typeof module !== 'undefined') module.exports = SAMPLE;
       '<b>休み</b>　定休・休は週2日の公休。有給・特休（お盆など）は公休とは別に取る<br>' +
       '<b>社員の設定</b>　氏名を押すと、週の出勤上限などを変更できます<br>' +
       '<b>右端の集計</b>　正社員の公休・有給等の日数。特別期間は「休み/そろえる日数」（黄＝少ない、青＝多い）<br>' +
-      '<b>日付の点線</b>　一部の店舗だけ休業（日付にマウスを乗せると店舗名）</div>';
+      '<b>日付の点線</b>　一部の店舗だけ休業（日付にマウスを乗せると店舗名）<br>' +
+      '<b>手入力</b>　セルをダブルクリック（または「✎ 手入力」を選んでセルを押す）と、「三 8:30-14:30」などを自由に書けます。先頭が店舗の記号ならその店舗の人数に数えます<br>' +
+      '<b>印刷</b>　「備考」を書いて保存 →「印刷（PDF・A3横）」で1枚にまとまったPDFが開きます</div>';
     $('side').innerHTML = h;
   }
   function onSide(e) {
@@ -1379,7 +1433,16 @@ if (typeof module !== 'undefined') module.exports = SAMPLE;
     $('ym').onchange = load;
     $('btnGen').onclick = generate;
     $('btnSave').onclick = function () { save(false); };
-    $('btnPrint').onclick = printSheet;
+    $('btnPrint').onclick = function () { printSheet(false); };
+    $('btnPdf').onclick = function () { printSheet(true); };
+    $('btnNote').onclick = function () { $('noteText').value = S.note || ''; $('noteDlg').showModal(); };
+    $('noteCancel').onclick = function () { $('noteDlg').close(); };
+    $('noteForm').onsubmit = function (e) {
+      e.preventDefault();
+      if ((S.note || '') !== $('noteText').value) { S.note = $('noteText').value; S.dirty = true; status('備考を変更しました（保存を押すと記録されます）'); }
+      $('noteDlg').close();
+    };
+    $('grid').ondblclick = function (e) { clearTimeout(S.hintTimer); var td = e.target.closest('td.cell'); if (td) typeIn(td); };
     $('modeSeg').onclick = function (e) { var b = e.target.closest('button'); if (b) setMode(b.dataset.mode); };
     $('palette').onclick = onPalette;
     $('grid').onclick = onGrid;

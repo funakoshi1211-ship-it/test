@@ -8,7 +8,9 @@
   </span>
   <button id="btnGen" class="primary">自動作成</button>
   <button id="btnSave">保存</button>
+  <button id="btnNote">備考</button>
   <button id="btnPrint">印刷用シート</button>
+  <button id="btnPdf">印刷（PDF・A3横）</button>
   <span class="status" id="status"></span>
 </header>
 <div class="demo" id="demo" hidden>デモ表示中です（仮名のサンプルデータ・2026年8月）。スプレッドシートには保存されません。</div>
@@ -33,6 +35,13 @@
     <div class="frow"><label>週の在宅日数</label><input type="number" name="weeklyRemote" min="0" max="7" placeholder="0"> 日</div>
     <p class="hint">半日の勤務も1日として数えます。</p>
     <div class="factions"><button type="button" id="sfCancel">キャンセル</button><button type="submit" class="primary">保存</button></div>
+  </form>
+</dialog>
+<dialog id="noteDlg">
+  <form id="noteForm">
+    <h2>備考（印刷用シートの下に出ます）</h2>
+    <textarea id="noteText" rows="8" placeholder="例：事務（常勤）川又 8/12-14（有給）、15（お盆）"></textarea>
+    <div class="factions"><button type="button" id="noteCancel">キャンセル</button><button type="submit" class="primary">決定</button></div>
   </form>
 </dialog>
 <div class="toast" id="toast"></div>

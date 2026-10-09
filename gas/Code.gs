@@ -194,7 +194,8 @@ function getData(ym) {
     });
   });
   master.adjacent = adjacent;
-  return { ym: ym, master: master, requests: readCells_('requests', ym), cells: readCells_('shift', ym), version: monthVersion_(ym) };
+  return { ym: ym, master: master, requests: readCells_('requests', ym), cells: readCells_('shift', ym), version: monthVersion_(ym),
+    note: PropertiesService.getDocumentProperties().getProperty('note_' + ym) || '' };
 }
 
 function readCells_(key, ym) {
@@ -223,12 +224,13 @@ function currentUser_() {
   try { return Session.getActiveUser().getEmail() || ''; } catch (e) { return ''; }
 }
 // baseId：読み込んだときの版。force：他の人の保存を上書きしてよいとき true
-function saveMonth(ym, requests, cells, baseId, force) {
+function saveMonth(ym, requests, cells, baseId, force, note) {
   return withLock_(function () {
     var cur = monthVersion_(ym);
     if (cur && cur.id !== baseId && !force) return { conflict: true, by: cur.by, at: cur.at };
     writeCells_('requests', ym, requests);
     writeCells_('shift', ym, cells);
+    if (note !== undefined && note !== null) PropertiesService.getDocumentProperties().setProperty('note_' + ym, String(note));
     var ver = { id: Utilities.getUuid(), by: currentUser_(), at: Utilities.formatDate(new Date(), TZ, 'M/d HH:mm') };
     PropertiesService.getDocumentProperties().setProperty('ver_' + ym, JSON.stringify(ver));
     return { ok: true, version: ver };
@@ -283,24 +285,26 @@ function saveStaff(s) {
 }
 
 // ---------- 印刷用シート ----------
-// 画面用の記号のうち、印刷では出さないもの（入：深夜勤の前日の午後、夜：準夜勤の日の日中）
-function printable_(v) { return v === '入' || v === '夜' ? '' : (v || ''); }
+// 画面用の記号のうち、印刷では出さないもの（入：深夜勤の前日の午後、夜：準夜勤の日の日中、明：深夜勤明け）
+function printable_(v) { return v === '入' || v === '夜' || v === '明' ? '' : (v || ''); }
 
-function exportPrint(ym, cells) {
+function exportPrint(ym, cells, note) {
   var data = getData(ym);
+  if (note === undefined || note === null) note = data.note || '';
   var ss = SpreadsheetApp.getActive();
   var name = '印刷_' + ym;
   var sh = ss.getSheetByName(name);
-  if (sh) sh.clear(); else sh = ss.insertSheet(name);
+  if (sh) { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart(); sh.clear(); } else sh = ss.insertSheet(name);
 
   var p = ym.split('-'), y = +p[0], m = +p[1];
   var n = new Date(y, m, 0).getDate();
-  var hol = {}; data.master.holidays.forEach(function (h) { hol[h.date] = true; });
+  var hol = {}; data.master.holidays.forEach(function (h) { if (!h.store) hol[h.date] = true; });
   var duty = {}; data.master.dutyDates.forEach(function (d) { duty[d] = true; });
   var dates = [];
   for (var d = 1; d <= n; d++) dates.push(Utilities.formatDate(new Date(y, m - 1, d), TZ, 'yyyy-MM-dd'));
+  var width = 3 + n;
 
-  var head1 = ['シフト表 ' + y + '年' + m + '月', '', ''].concat(dates.map(function (x, i) { return i + 1; }));
+  var head1 = ['シフト表　' + y + '年' + m + '月', '', ''].concat(dates.map(function (x, i) { return i + 1; }));
   var head2 = ['氏名', '職種', '区分'].concat(dates.map(function (x) { return WEEKDAYS[new Date(x + 'T00:00:00').getDay()]; }));
   var values = [head1, head2];
   var staff = data.master.staff.slice().sort(function (a, b) { return a.order - b.order; });
@@ -314,24 +318,55 @@ function exportPrint(ym, cells) {
     });
     values.push(am, pm);
   });
-  sh.getRange(1, 1, values.length, values[0].length).setValues(values)
-    .setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
-  sh.getRange(1, 1).setFontSize(14).setFontWeight('bold').setHorizontalAlignment('left');
-  sh.getRange(2, 1, 1, values[0].length).setFontWeight('bold').setBackground('#eef2f5');
+  var lastRow = values.length;
+  var all = sh.getRange(1, 1, lastRow, width);
+  all.setNumberFormat('@').setValues(values)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9).setWrap(true);
+  sh.getRange(1, 1, 1, 3).merge().setFontSize(14).setFontWeight('bold').setHorizontalAlignment('left');
+  sh.getRange(1, 4, 2, n).setFontWeight('bold');
+  sh.getRange(2, 1, 1, 3).setFontWeight('bold').setBackground('#eef2f5');
   for (var i = 0; i < staff.length; i++) {
     var r = 3 + i * 2;
     sh.getRange(r, 1, 2, 1).merge(); sh.getRange(r, 2, 2, 1).merge(); sh.getRange(r, 3, 2, 1).merge();
-    sh.getRange(r + 1, 4, 1, n).setBorder(false, false, true, false, false, false);
   }
   dates.forEach(function (x, i) {
     var w = new Date(x + 'T00:00:00').getDay();
-    var col = sh.getRange(1, 4 + i, values.length, 1);
-    if (w === 0 || hol[x]) col.setBackground('#e6e6e6');
+    var col = sh.getRange(2, 4 + i, lastRow - 1, 1);
+    if (w === 0 || hol[x]) { col.setBackground('#e6e6e6'); sh.getRange(1, 4 + i, 2, 1).setFontColor('#c00000'); }
+    else if (w === 6) sh.getRange(1, 4 + i, 2, 1).setFontColor('#1f4e9c');
     if (duty[x]) sh.getRange(1, 4 + i).setBackground('#222222').setFontColor('#ffffff');
   });
-  sh.setColumnWidth(1, 90); sh.setColumnWidth(2, 40); sh.setColumnWidth(3, 50);
-  for (var c = 4; c < 4 + n; c++) sh.setColumnWidth(c, 34);
-  sh.getRange(1, 1, values.length, values[0].length).setBorder(true, true, true, true, true, false, '#999999', SpreadsheetApp.BorderStyle.SOLID);
+  all.setBorder(true, true, true, true, true, true, '#bbbbbb', SpreadsheetApp.BorderStyle.SOLID);
+  all.setBorder(true, true, true, true, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  for (var j = 0; j < staff.length; j++) {
+    sh.getRange(3 + j * 2 + 1, 1, 1, width).setBorder(null, null, true, null, null, null, '#555555', SpreadsheetApp.BorderStyle.SOLID);
+  }
+
+  // 備考と承認欄
+  var top = lastRow + 2;
+  var noteCols = width - 9;
+  sh.getRange(top, 1).setValue('（備考）').setFontWeight('bold').setFontSize(10);
+  sh.getRange(top + 1, 1, 4, noteCols).merge().setValue(note || '')
+    .setVerticalAlignment('top').setHorizontalAlignment('left').setWrap(true).setFontSize(10)
+    .setBorder(true, true, true, true, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+  ['社長', '管理者', '事務'].forEach(function (label, k) {
+    var col = width - 8 + k * 3;
+    sh.getRange(top, col, 1, 3).merge().setValue(label).setHorizontalAlignment('center').setFontWeight('bold')
+      .setBackground('#f3ead1').setBorder(true, true, true, true, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+    sh.getRange(top + 1, col, 4, 3).merge()
+      .setBorder(true, true, true, true, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+  });
+
+  sh.setColumnWidth(1, 92); sh.setColumnWidth(2, 40); sh.setColumnWidth(3, 50);
+  for (var c = 4; c <= width; c++) sh.setColumnWidth(c, 36);
+  sh.setRowHeights(1, top + 4, 20);
+  sh.setRowHeight(1, 28);
   sh.setFrozenRows(2); sh.setFrozenColumns(3);
-  return ss.getUrl() + '#gid=' + sh.getSheetId();
+  SpreadsheetApp.flush();
+
+  // A3横・1枚に収めたPDF（ブラウザで開いて印刷する）
+  var pdf = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=pdf&gid=' + sh.getSheetId() +
+    '&size=A3&portrait=false&fitw=true&gridlines=false&printtitle=false&sheetnames=false&pagenum=UNDEFINED' +
+    '&fzr=false&top_margin=0.4&bottom_margin=0.4&left_margin=0.4&right_margin=0.4&horizontal_alignment=CENTER&vertical_alignment=TOP';
+  return { sheet: ss.getUrl() + '#gid=' + sh.getSheetId(), pdf: pdf };
 }

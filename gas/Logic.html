@@ -32,7 +32,14 @@ var ShiftLogic = (function () {
   function dow(s) { var p = parts(s); return new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay(); }
   function daysInMonth(y, m) { return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
 
-  function isStore(ctx, v) { return !!ctx.storeSet[v]; }
+  // 店舗の記号。手入力の「三 8:30-14:30」のように、先頭が店舗記号の文字もその店舗として数える
+  function storeOf(ctx, v) {
+    if (!v) return null;
+    if (ctx.storeSet[v]) return v;
+    var head = String(v).charAt(0);
+    return String(v).length > 1 && ctx.storeSet[head] ? head : null;
+  }
+  function isStore(ctx, v) { return !!storeOf(ctx, v); }
   function roleOf(s) { return s.job === '事務' ? 'clerk' : 'pharm'; }
   function isRegular(s) { return s.kind === '常勤' || s.kind === '準常勤'; }
   function isExternal(s) { return s.kind === '外部'; }
@@ -143,7 +150,8 @@ var ShiftLogic = (function () {
   function isWorkingCell(ctx, c) {
     if (!c) return false;
     if (c.N) return true;
-    return SLOTS.some(function (k) { return isStore(ctx, c[k]) || AWAY.indexOf(c[k]) >= 0; });
+    // 店舗・※・重信・在宅のほか、手入力の文字（「研修」など）も出勤として数える
+    return SLOTS.some(function (k) { var v = c[k]; return !!v && OFF.indexOf(v) < 0 && v !== WANT; });
   }
   // 有給・特休の日（公休には数えない）
   function isLeaveDay(ctx, c) {
@@ -156,7 +164,7 @@ var ShiftLogic = (function () {
     ctx.staff.forEach(function (s) {
       if (roleOf(s) !== role) return;
       var c = peek(cells, s.id, date);
-      if (c && c[slot] === store) n++;
+      if (c && storeOf(ctx, c[slot]) === store) n++;
     });
     return n;
   }
@@ -689,15 +697,15 @@ var ShiftLogic = (function () {
         if (streak === MAX_STREAK + 1) add('error', s.name + '：' + (MAX_STREAK + 1) + '連勤以上', s.id, x.date);
 
         SLOTS.forEach(function (k) {
-          var v = c[k];
-          if (isStore(ctx, v)) {
+          var raw = c[k], v = storeOf(ctx, raw);
+          if (v) {
             if (!openKind(ctx, v, x.date, k)) add('error', s.name + '：' + storeName[v] + 'は' + slotName[k] + '営業していません', s.id, x.date);
             if (s.fixed && v !== s.home) add('warn', s.name + '：固定配置（' + storeName[s.home] + '）以外の店舗です', s.id, x.date);
             else if (allowedStores(s).indexOf(v) < 0) add('warn', s.name + '：' + storeName[v] + 'は出勤できる店舗に入っていません', s.id, x.date);
             if (c.N === '深夜') add('error', s.name + '：深夜勤（0-9）の日に日中勤務があります', s.id, x.date);
           }
           var rv = reqVal(R, s.id, x.date, k);
-          if (rv && rv !== WANT && rv !== v) add('warn', s.name + '：希望（' + rv + '）と違います', s.id, x.date);
+          if (rv && rv !== WANT && rv !== raw) add('warn', s.name + '：希望（' + rv + '）と違います', s.id, x.date);
           if (rv === WANT && !isStore(ctx, v)) add('warn', s.name + '：出勤希望の日に入っていません', s.id, x.date);
         });
         var rn = reqVal(R, s.id, x.date, 'N');

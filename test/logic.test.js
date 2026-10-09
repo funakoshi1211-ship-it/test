@@ -147,4 +147,14 @@ t('準夜勤の人は、その日の日中は勤務せず人数に数えない�
   }
   assert.ok(nextDayWork >= 1, '翌日に出勤している例がある');
 });
+t('手入力の文字（先頭が店舗記号）はその店舗の人数に数え、出勤日として扱う', () => {
+  const c5 = JSON.parse(JSON.stringify(cells));
+  const k = M.staff.find(s => s.name === '薬剤師K');
+  const d = '2026-08-04';
+  const before = v.counts['三'][d].AM.pharm.have;
+  c5[k.id][d] = { AM: '三 8:30-14:30', PM: '研修', N: '' };
+  const v5 = L.validate(M, R, c5, 2026, 8);
+  assert.strictEqual(v5.counts['三'][d].AM.pharm.have, before + (cells[k.id][d].AM === '三' ? 0 : 1));
+  assert.ok(!v5.issues.some(i => i.id === k.id && i.date === d && i.level === 'error'), '手入力の文字でエラーにならない');
+});
 console.log(ok + ' passed');
