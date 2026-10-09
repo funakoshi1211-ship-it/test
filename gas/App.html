@@ -42,9 +42,13 @@
     call('getData', S.ym).then(function (d) {
       S.master = d.master; S.requests = d.requests || {}; S.cells = d.cells || {};
       S.version = d.version || null;
+      S.touched = !!d.cells; // 保存済みのシフトには手直しが入っている前提で扱う
       S.note = d.note || '';
       S.dirty = false;
       if (!S.master.staff.length) toast('「社員」シートに社員が登録されていません');
+      var seen = {}, dup = [];
+      S.master.staff.forEach(function (s) { if (seen[s.id]) dup.push(s.id); seen[s.id] = true; });
+      if (dup.length) alert('「社員」シートでIDが重複しています：' + dup.join('、') + '\n重ならない番号に直してから「読み込み」を押してください。');
       refresh();
       status(d.cells ? '保存済みのシフトを読み込みました' : 'シフトは未作成です。「自動作成」を押してください');
     }).catch(function (e) { status(''); alert('読み込みに失敗しました：' + (e && e.message || e)); });
@@ -67,10 +71,13 @@
   }
   function generate() {
     var has = Object.keys(S.cells).some(function (id) { return Object.keys(S.cells[id]).some(function (d) { var c = S.cells[id][d]; return c.AM || c.PM || c.N; }); });
-    if (has && !confirm('今のシフトを消して、希望をもとに作り直します。よろしいですか？')) return;
+    if (has && S.touched) {
+      if (!confirm('【注意】手入力・手直しした内容があります。\n\nこのまま自動作成すると、手直しはすべて消えて作り直されます（「① 希望入力」の内容は残ります）。\n\nこのまま押して自動作成していいですか？')) return;
+    } else if (has && !confirm('今のシフトを消して、希望をもとに作り直します。よろしいですか？')) return;
     var p = ymParts();
     S.cells = L.generate(S.master, S.requests, p[0], p[1]);
     S.dirty = true;
+    S.touched = false;
     setMode('shift');
     var errs = S.result.issues.filter(function (i) { return i.level === 'error'; }).length;
     status('自動作成しました（要確認 ' + errs + '件）');
@@ -129,6 +136,7 @@
     c[row] = v;
     if (!c.AM && !c.PM && !c.N) delete map[id][date];
     S.dirty = true;
+    if (S.mode === 'shift') S.touched = true;
     refresh();
   }
   function onGrid(e) {
@@ -163,6 +171,7 @@
     }
     if (!c.AM && !c.PM && !c.N) delete map[id][date];
     S.dirty = true;
+    if (S.mode === 'shift') S.touched = true;
     refresh();
   }
   function setMode(m) {

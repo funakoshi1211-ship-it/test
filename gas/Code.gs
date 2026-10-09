@@ -73,6 +73,7 @@ function setup() {
   ['希望', 'シフト', '祝日・休業日', '夜間当番日', '特別期間', '臨時営業'].forEach(function (n) {
     ss.getSheetByName(n).getRange('A:C').setNumberFormat('@');
   });
+  setValidation_();
   var first = ss.getSheetByName('シート1');
   if (first && first.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(first);
   SpreadsheetApp.getActive().toast('シートを作成しました。「社員」シートに社員を登録してください。', 'シフト作成', 8);
@@ -125,6 +126,29 @@ function defaultDutyDates_() {
     d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 8);
   }
   return rows;
+}
+
+// 入力ミスを防ぐプルダウン（違う値も入れられるが、警告の印が付く）
+function setValidation_() {
+  var ss = SpreadsheetApp.getActive();
+  function list(sheetName, col, values) {
+    var sh = ss.getSheetByName(sheetName);
+    var rule = SpreadsheetApp.newDataValidation().requireValueInList(values, true).setAllowInvalid(true).build();
+    sh.getRange(2, col, Math.max(sh.getMaxRows() - 1, 500), 1).setDataValidation(rule);
+  }
+  var stores = rows_('stores').map(function (r) { return str_(r[0]); }).filter(Boolean);
+  list(SHEETS.staff.name, 3, ['管薬', '薬', '事務']);
+  list(SHEETS.staff.name, 4, ['常勤', '準常勤', '非常勤', '外部']);
+  list(SHEETS.staff.name, 5, stores);
+  list(SHEETS.staff.name, 6, ['○']);
+  list(SHEETS.staff.name, 8, ['○']);
+  list(SHEETS.reqs.name, 1, stores);
+  list(SHEETS.reqs.name, 2, ['平日', '土曜', '当番']);
+  list(SHEETS.reqs.name, 3, ['午前', '午後']);
+  list(SHEETS.holidays.name, 3, stores);
+  list(SHEETS.extra.name, 2, stores);
+  list(SHEETS.extra.name, 3, ['午前', '午後', '終日']);
+  list(SHEETS.periods.name, 5, ['有給', '応援', 'なし']);
 }
 
 // ---------- 読み込み ----------
