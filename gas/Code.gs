@@ -283,6 +283,9 @@ function saveStaff(s) {
 }
 
 // ---------- 印刷用シート ----------
+// 画面用の記号のうち、印刷では出さないもの（入：深夜勤の前日の午後）
+function printable_(v) { return v === '入' ? '' : (v || ''); }
+
 function exportPrint(ym, cells) {
   var data = getData(ym);
   var ss = SpreadsheetApp.getActive();
@@ -305,8 +308,9 @@ function exportPrint(ym, cells) {
     var am = [s.name, s.job, s.kind], pm = ['', '', ''];
     dates.forEach(function (x) {
       var c = (cells[s.id] && cells[s.id][x]) || {};
-      am.push((c.AM || '') + (c.N === '深夜' ? (c.AM ? ' ' : '') + '0-9' : ''));
-      pm.push((c.PM || '') + (c.N === '準夜' ? (c.PM ? ' ' : '') + '16-24' : ''));
+      // 夜勤の日は時間だけを書く（深夜勤：午前の段に 0-9、準夜勤：午後の段に 16-24）
+      am.push(c.N === '深夜' ? '0-9' : printable_(c.AM));
+      pm.push(c.N === '準夜' ? '16-24' : printable_(c.PM));
     });
     values.push(am, pm);
   });

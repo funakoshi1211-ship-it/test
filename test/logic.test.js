@@ -123,4 +123,17 @@ t('特別期間の公休を正社員でそろえ、休業日が多い人の多�
   const san = regs.filter(s => s.home === '三');
   san.forEach(s => assert.ok(!Object.values(cD[s.id]).some(c => c.AM === '有給'), s.name));
 });
+t('祝日のある週は、祝日と日曜以外はすべて出勤（深夜勤の前日も午前は出勤）', () => {
+  const M4 = Object.assign({}, M, { holidays: [{ date: '2026-11-03' }, { date: '2026-11-23' }],
+    dutyDates: ['2026-11-05', '2026-11-13', '2026-11-21', '2026-11-29'], specialPeriods: [] });
+  const c4 = L.generate(M4, {}, 2026, 11);
+  const wk = ['2026-11-02', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07'];
+  M.staff.filter(s => s.kind === '常勤' || s.kind === '準常勤').forEach(s => {
+    wk.forEach(d => {
+      const c = c4[s.id][d];
+      const working = stores.includes(c.AM) || stores.includes(c.PM) || ['※', '重信', '在宅'].includes(c.AM) || c.N;
+      assert.ok(working, s.name + ' ' + d + ' ' + JSON.stringify(c));
+    });
+  });
+});
 console.log(ok + ' passed');
