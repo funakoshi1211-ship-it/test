@@ -101,7 +101,7 @@ const MD = Object.assign({}, M, {
     { date: '2026-12-31', name: '年末休業', store: '一' }, { date: '2026-12-31', name: '年末休業', store: '松' }
   ],
   dutyDates: [], extraOpen: [],
-  specialPeriods: [{ name: '年末年始', start: '2026-12-28', end: '2027-01-04', targetOff: 5, fillCode: '有給' }],
+  specialPeriods: [{ name: '年末年始', start: '2026-12-28', end: '2027-01-04', targetOff: 4, overflow: '有給' }],
   specialReqs: []
 });
 const cD = L.generate(MD, {}, 2026, 12);
@@ -113,13 +113,14 @@ t('店舗ごとの休業日：その店舗だけ誰も配置されない', () =>
   }
   assert.ok(M.staff.some(s => cD[s.id]['2026-12-29'].AM === '三'), '三番町は営業している');
 });
-t('特別期間の休日数を正社員でそろえる（足りない人は有給で補う）', () => {
+t('特別期間の公休を正社員でそろえ、休業日が多い人の多い分は有給にする', () => {
   const regs = M.staff.filter(s => s.kind === '常勤' || s.kind === '準常勤');
-  const sums = regs.map(s => ({ s, p: vD.summary[s.id].periods[0] }));
-  const mismatch = sums.filter(x => x.p.off !== 5);
-  // 合わないのは、自分の店舗の休業日が多く、応援にも出られない人（固定配置など）だけ
-  mismatch.forEach(x => assert.ok(x.p.off > 5 && (x.s.fixed || !(x.s.canStores || []).length), x.s.name + ' ' + x.p.off));
-  assert.ok(sums.filter(x => x.p.off === 5).length >= regs.length - 4);
-  assert.ok(regs.some(s => Object.values(cD[s.id]).some(c => c.AM === '有給')), '有給で補っている');
+  regs.forEach(s => assert.strictEqual(vD.summary[s.id].periods[0].off, 4, s.name + ' の公休'));
+  // 一番町の正社員（休業日が多い）は、多い分が有給になる
+  const ichi = regs.filter(s => s.home === '一');
+  ichi.forEach(s => assert.ok(['2026-12-29', '2026-12-30', '2026-12-31'].some(d => cD[s.id][d].AM === '有給'), s.name));
+  // 休業日の少ない店舗の人に、有給は自動で入らない
+  const san = regs.filter(s => s.home === '三');
+  san.forEach(s => assert.ok(!Object.values(cD[s.id]).some(c => c.AM === '有給'), s.name));
 });
 console.log(ok + ' passed');

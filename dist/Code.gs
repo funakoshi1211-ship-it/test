@@ -20,7 +20,7 @@ var SHEETS = {
   holidays: { name: '祝日・休業日', header: ['日付', '名称', '店舗記号（空欄＝全店舗）'] },
   extra: { name: '臨時営業', header: ['日付', '店舗記号', '時間帯（午前/午後/終日）', 'メモ'] },
   duty: { name: '夜間当番日', header: ['日付'] },
-  periods: { name: '特別期間', header: ['名称', '開始日', '終了日', '正社員の休日数（そろえる日数）', '足りない分の休み（有給/特休/休）'] },
+  periods: { name: '特別期間', header: ['名称', '開始日', '終了日', '正社員の公休数（そろえる日数）', '公休が多い人の扱い（有給/応援/なし）'] },
   periodReqs: { name: '特別期間の必要人数', header: ['特別期間の名称', '店舗記号', '曜日区分（平日/土曜/当番）', '時間帯（午前/午後）', '薬剤師', '事務'] },
   requests: { name: '希望', header: ['年月', '社員ID', '日付', '午前', '午後', '夜'] },
   shift: { name: 'シフト', header: ['年月', '社員ID', '日付', '午前', '午後', '夜'] }
@@ -177,7 +177,7 @@ function getData(ym) {
     extraOpen: rows_('extra').map(function (r) { return { date: date_(r[0]), store: str_(r[1]), slot: slot_(r[2]) }; }),
     dutyDates: rows_('duty').map(function (r) { return date_(r[0]); }),
     specialPeriods: rows_('periods').map(function (r) {
-      return { name: str_(r[0]), start: date_(r[1]), end: date_(r[2]), targetOff: num_(r[3]), fillCode: str_(r[4]) || '有給' };
+      return { name: str_(r[0]), start: date_(r[1]), end: date_(r[2]), targetOff: num_(r[3]), overflow: str_(r[4]) || '有給' };
     }),
     specialReqs: rows_('periodReqs').map(function (r) {
       return { period: str_(r[0]), store: str_(r[1]), dayType: str_(r[2]), slot: slot_(r[3]), pharm: num_(r[4]) || 0, clerk: num_(r[5]) || 0 };
