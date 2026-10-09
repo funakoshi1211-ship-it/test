@@ -283,8 +283,8 @@ function saveStaff(s) {
 }
 
 // ---------- 印刷用シート ----------
-// 画面用の記号のうち、印刷では出さないもの（入：深夜勤の前日の午後）
-function printable_(v) { return v === '入' ? '' : (v || ''); }
+// 画面用の記号のうち、印刷では出さないもの（入：深夜勤の前日の午後、夜：準夜勤の日の日中）
+function printable_(v) { return v === '入' || v === '夜' ? '' : (v || ''); }
 
 function exportPrint(ym, cells) {
   var data = getData(ym);

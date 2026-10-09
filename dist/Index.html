@@ -154,7 +154,7 @@
  *   AM/PM には店舗記号・勤務外の記号・休みの記号、N には '準夜' / '深夜' が入る
  */
 var ShiftLogic = (function () {
-  var OFF = ['定休', '休', '有給', '特休', '×', '明', '入'];
+  var OFF = ['定休', '休', '有給', '特休', '×', '明', '入', '夜'];
   var LEAVE = ['有給', '特休']; // 公休（週2日）とは別に取る休み
   var AWAY = ['※', '重信', '在宅'];
   var NIGHT = ['準夜', '深夜'];
@@ -378,6 +378,8 @@ var ShiftLogic = (function () {
       if (!hasEve) {
         var cand = eligible.filter(function (s) {
           if (!canNight(s, x.date)) return false;
+          // 準夜勤の日は日中に勤務しないので、日中の予定が決まっている人は外す
+          if (SLOTS.some(function (k) { var v = reqVal(R, s.id, x.date, k); return v && OFF.indexOf(v) < 0; })) return false;
           var prev = peek(cells, s.id, addDays(x.date, -1));
           return !(prev && prev.N === '深夜');
         }).sort(function (a, b) { return stats[a.id].night - stats[b.id].night; });
@@ -404,10 +406,12 @@ var ShiftLogic = (function () {
         }
       }
     });
+    // 準夜の日は日中勤務なし（店舗の人数にも数えない）。翌日は通常どおり出勤できる
     // 深夜の日は日中勤務なし
     ctx.staff.forEach(function (s) {
       ctx.days.forEach(function (x) {
         var c = peek(cells, s.id, x.date);
+        if (c && c.N === '準夜') SLOTS.forEach(function (k) { if (!locked(s.id, x.date, k)) c[k] = '夜'; });
         if (!c || c.N !== '深夜') return;
         SLOTS.forEach(function (k) { if (!locked(s.id, x.date, k)) c[k] = '明'; });
         // 前日の午後は勤務なし（午前 9-13 のみ）
@@ -852,6 +856,7 @@ var ShiftLogic = (function () {
         }
         var tomorrow = peek(cells, s.id, addDays(x.date, 1));
         if (tomorrow && tomorrow.N === '深夜' && isStore(ctx, c.PM)) add('error', s.name + '：深夜勤の前日は午前（9-13）のみです', s.id, x.date);
+        if (c.N === '準夜' && SLOTS.some(function (k) { return isStore(ctx, c[k]); })) add('error', s.name + '：準夜勤（16-24）の日は日中の勤務に入れません', s.id, x.date);
       });
       // 週ごと
       ctx.weeks.forEach(function (wk) {
@@ -1297,7 +1302,7 @@ if (typeof module !== 'undefined') module.exports = SAMPLE;
       '茶色の枠：希望入力で決まっている枠（自動作成で変わらない）<br>' +
       '赤い枠：その日にルール違反がある<br>' +
       '日付が黒：夜間当番日　黄色の日付：特別期間<br>' +
-      '<b>記号</b>　※・重信：出勤扱いで店舗にいない　在宅：在宅勤務　入：深夜勤の前日の午後（勤務なし）　明：深夜勤明け　出：出勤希望（非常勤）<br>' +
+      '<b>記号</b>　※・重信：出勤扱いで店舗にいない　在宅：在宅勤務　夜：準夜勤の日の日中（勤務なし・人数に数えない）　入：深夜勤の前日の午後（勤務なし）　明：深夜勤明け　出：出勤希望（非常勤）<br>' +
       '<b>休み</b>　定休・休は週2日の公休。有給・特休（お盆など）は公休とは別に取る<br>' +
       '<b>社員の設定</b>　氏名を押すと、週の出勤上限などを変更できます<br>' +
       '<b>右端の集計</b>　正社員の公休・有給等の日数。特別期間は「休み/そろえる日数」（黄＝少ない、青＝多い）<br>' +

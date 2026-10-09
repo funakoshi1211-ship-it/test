@@ -136,4 +136,15 @@ t('祝日のある週は、祝日と日曜以外はすべて出勤（深夜勤�
     });
   });
 });
+t('準夜勤の人は、その日の日中は勤務せず人数に数えない。翌日は出勤できる', () => {
+  let nextDayWork = 0;
+  for (const d of M.dutyDates) {
+    const p = M.staff.find(s => cells[s.id][d] && cells[s.id][d].N === '準夜');
+    assert.ok(p, d);
+    ['AM', 'PM'].forEach(k => assert.ok(!stores.includes(cells[p.id][d][k]), p.name + ' ' + d + ' ' + k + '=' + cells[p.id][d][k]));
+    const nx = cells[p.id][L.addDays(d, 1)];
+    if (nx && (stores.includes(nx.AM) || stores.includes(nx.PM))) nextDayWork++;
+  }
+  assert.ok(nextDayWork >= 1, '翌日に出勤している例がある');
+});
 console.log(ok + ' passed');
