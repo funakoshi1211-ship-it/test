@@ -15,7 +15,7 @@ var SHEETS = {
     name: '社員',
     header: ['ID', '氏名', '職種（管薬/薬/事務）', '区分（常勤/準常勤/非常勤/外部）', '所属店舗（記号）', '固定（○）',
       '応援できる店舗（記号を並べる）', '夜勤可（○）', '出勤できない曜日（例：水土）', '週の出勤上限（非常勤）',
-      '週の店舗出勤上限', '週の在宅日数', '平日の終業時刻', '土曜の終業時刻', '表示順']
+      '週の店舗出勤上限', '週の在宅日数', '平日の終業時刻', '土曜の終業時刻', '表示順', '休みにしたい曜日（できれば）']
   },
   holidays: { name: '祝日・休業日', header: ['日付', '名称'] },
   extra: { name: '臨時営業', header: ['日付', '店舗記号', '時間帯（午前/午後/終日）', 'メモ'] },
@@ -163,7 +163,8 @@ function getData(ym) {
         canStores: chars_(r[6]), night: yes_(r[7]),
         ngWeekdays: chars_(r[8]).map(function (c) { return WEEKDAYS.indexOf(c); }).filter(function (n) { return n >= 0; }),
         weeklyMax: num_(r[9]), weeklyStoreMax: num_(r[10]), weeklyRemote: num_(r[11]) || 0,
-        endWeekday: str_(r[12]), endSat: str_(r[13]), order: num_(r[14]) || (i + 1)
+        endWeekday: str_(r[12]), endSat: str_(r[13]), order: num_(r[14]) || (i + 1),
+        prefOffWeekdays: chars_(r[15]).map(function (c) { return WEEKDAYS.indexOf(c); }).filter(function (n) { return n >= 0; })
       };
     }).filter(function (s) { return s.id && s.name; }),
     holidays: rows_('holidays').map(function (r) { return { date: date_(r[0]), name: str_(r[1]) }; }),
@@ -230,6 +231,10 @@ function saveStaff(s) {
       s.weeklyMax == null ? '' : s.weeklyMax, s.weeklyStoreMax == null ? '' : s.weeklyStoreMax, s.weeklyRemote || ''
     ];
     sh.getRange(i + 2, 4, 1, row.length).setValues([row]);
+    var prefCol = SHEETS.staff.header.length;
+    if (!str_(sh.getRange(1, prefCol).getValue())) sh.getRange(1, prefCol).setValue(SHEETS.staff.header[prefCol - 1]).setFontWeight('bold').setBackground('#eef2f5');
+    sh.getRange(i + 2, prefCol).setNumberFormat('@')
+      .setValue((s.prefOffWeekdays || []).map(function (n) { return WEEKDAYS.charAt(n); }).join(''));
     return true;
   }
   throw new Error('社員が見つかりません：' + s.id);

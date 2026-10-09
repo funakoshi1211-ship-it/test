@@ -74,4 +74,23 @@ t('非常勤は週の出勤上限を超えない', () => {
   const bad = v.issues.filter(i => i.msg.includes('日出勤（上限'));
   assert.strictEqual(bad.length, 0, JSON.stringify(bad));
 });
+t('月末の日曜が当番日でも7連勤にならない（2026年11月）', () => {
+  const M2 = Object.assign({}, M, {
+    holidays: [{ date: '2026-11-03', name: '文化の日' }, { date: '2026-11-23', name: '勤労感謝の日' }],
+    dutyDates: ['2026-11-05', '2026-11-13', '2026-11-21', '2026-11-29'], specialPeriods: []
+  });
+  const c2 = L.generate(M2, {}, 2026, 11);
+  const v2 = L.validate(M2, {}, c2, 2026, 11);
+  const bad = v2.issues.filter(i => i.msg.includes('連勤'));
+  assert.strictEqual(bad.length, 0, JSON.stringify(bad));
+});
+t('休みにしたい曜日（できれば）を優先して定休にする', () => {
+  const staff = M.staff.map(x => x.name === '事務V' ? Object.assign({}, x, { prefOffWeekdays: [3] }) : x);
+  const M3 = Object.assign({}, M, { staff });
+  const c3 = L.generate(M3, R, 2026, 8);
+  const q = staff.find(x => x.name === '事務V');
+  const weds = ['2026-08-05', '2026-08-19', '2026-08-26'];
+  const off = weds.filter(d => c3[q.id][d].AM === '定休').length;
+  assert.ok(off >= 2, '水曜の定休 ' + off + '/3');
+});
 console.log(ok + ' passed');

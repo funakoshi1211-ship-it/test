@@ -182,6 +182,7 @@ var ShiftLogic = (function () {
     function wantsWork(id, date) { return SLOTS.some(function (k) { return reqVal(R, id, date, k) === WANT; }); }
     function offRequested(id, date, key) { var v = reqVal(R, id, date, key); return OFF.indexOf(v) >= 0; }
     function ngDay(s, date) { return (s.ngWeekdays || []).indexOf(dow(date)) >= 0; }
+    function prefOff(s, date) { return (s.prefOffWeekdays || []).indexOf(dow(date)) >= 0; }
 
     // 1. 夜間当番（三番町）
     ctx.days.forEach(function (x) {
@@ -323,6 +324,11 @@ var ShiftLogic = (function () {
           });
           if (!cand.length) break;
           cand.sort(function (a, b) {
+            // 人が足りなくならない日の中で、本人の希望曜日を優先する
+            var oa = slackIfOff(s, a.date) >= 0 ? 0 : 1, ob = slackIfOff(s, b.date) >= 0 ? 0 : 1;
+            if (oa !== ob) return oa - ob;
+            var pa = prefOff(s, a.date) ? 0 : 1, pb = prefOff(s, b.date) ? 0 : 1;
+            if (pa !== pb) return pa - pb;
             var d = slackIfOff(s, b.date) - slackIfOff(s, a.date);
             if (d) return d;
             return homeOpenSlots(s, a.date).length - homeOpenSlots(s, b.date).length;
@@ -357,6 +363,42 @@ var ShiftLogic = (function () {
         var c = peek(cells, s.id, x.date);
         homeOpenSlots(s, x.date).forEach(function (k) { if (!c[k]) c[k] = s.home; });
       });
+    });
+
+    // 4b. 連勤が上限を超えたら、その中の1日を定休にする（当番日の日曜勤務などで起きる）
+    regulars.forEach(function (s) {
+      var guard = 0;
+      while (guard++ < 10) {
+        var run = [], found = null;
+        ctx.days.forEach(function (x) {
+          if (found) return;
+          if (isWorkingCell(ctx, peek(cells, s.id, x.date))) {
+            run.push(x);
+            if (run.length > MAX_STREAK) found = run.slice();
+          } else run = [];
+        });
+        if (!found) break;
+        var cand = found.filter(function (x) {
+          var c = peek(cells, s.id, x.date);
+          return !dayLocked(s.id, x.date) && !c.N && homeOpenSlots(s, x.date).length &&
+            SLOTS.every(function (k) { return !c[k] || c[k] === s.home; });
+        });
+        if (!cand.length) break;
+        cand.sort(function (a, b) {
+          function slack(x) {
+            var worst = Infinity;
+            homeOpenSlots(s, x.date).forEach(function (k) {
+              var r = required(ctx, s.home, x.date, k, roleOf(s));
+              var sl = countAt(ctx, cells, s.home, x.date, k, roleOf(s)) - (r ? r.min : 0);
+              if (sl < worst) worst = sl;
+            });
+            return worst;
+          }
+          return slack(b) - slack(a);
+        });
+        var cc = peek(cells, s.id, cand[0].date);
+        SLOTS.forEach(function (k) { if (cc[k] === s.home) cc[k] = '定休'; });
+      }
     });
 
     // 5. 非常勤の「出勤希望」日

@@ -285,6 +285,9 @@
     $('sfNg').innerHTML = WD.split('').map(function (w, i) {
       return '<label><input type="checkbox" name="ng" value="' + i + '"' + ((s.ngWeekdays || []).indexOf(i) >= 0 ? ' checked' : '') + '>' + w + '</label>';
     }).join('');
+    $('sfPref').innerHTML = WD.split('').map(function (w, i) {
+      return '<label><input type="checkbox" name="pref" value="' + i + '"' + ((s.prefOffWeekdays || []).indexOf(i) >= 0 ? ' checked' : '') + '>' + w + '</label>';
+    }).join('');
     f.weeklyMax.value = s.weeklyMax || '';
     f.weeklyStoreMax.value = s.weeklyStoreMax || '';
     f.weeklyRemote.value = s.weeklyRemote || '';
@@ -302,6 +305,7 @@
     s.canStores = Array.prototype.map.call(f.querySelectorAll('input[name=can]:checked'), function (i) { return i.value; })
       .filter(function (c) { return c !== s.home; });
     s.ngWeekdays = Array.prototype.map.call(f.querySelectorAll('input[name=ng]:checked'), function (i) { return +i.value; });
+    s.prefOffWeekdays = Array.prototype.map.call(f.querySelectorAll('input[name=pref]:checked'), function (i) { return +i.value; });
     s.weeklyMax = num(f.weeklyMax.value);
     s.weeklyStoreMax = num(f.weeklyStoreMax.value);
     s.weeklyRemote = num(f.weeklyRemote.value) || 0;
