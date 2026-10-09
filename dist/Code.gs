@@ -17,10 +17,10 @@ var SHEETS = {
       '応援できる店舗（記号を並べる）', '夜勤可（○）', '出勤できない曜日（例：水土）', '週の出勤上限（非常勤）',
       '週の店舗出勤上限', '週の在宅日数', '平日の終業時刻', '土曜の終業時刻', '表示順', '休みにしたい曜日（できれば）']
   },
-  holidays: { name: '祝日・休業日', header: ['日付', '名称'] },
+  holidays: { name: '祝日・休業日', header: ['日付', '名称', '店舗記号（空欄＝全店舗）'] },
   extra: { name: '臨時営業', header: ['日付', '店舗記号', '時間帯（午前/午後/終日）', 'メモ'] },
   duty: { name: '夜間当番日', header: ['日付'] },
-  periods: { name: '特別期間', header: ['名称', '開始日', '終了日'] },
+  periods: { name: '特別期間', header: ['名称', '開始日', '終了日', '正社員の休日数（そろえる日数）', '足りない分の休み（有給/特休/休）'] },
   periodReqs: { name: '特別期間の必要人数', header: ['特別期間の名称', '店舗記号', '曜日区分（平日/土曜/当番）', '時間帯（午前/午後）', '薬剤師', '事務'] },
   requests: { name: '希望', header: ['年月', '社員ID', '日付', '午前', '午後', '夜'] },
   shift: { name: 'シフト', header: ['年月', '社員ID', '日付', '午前', '午後', '夜'] }
@@ -52,6 +52,12 @@ function setup() {
     if (sh.getLastRow() === 0) {
       sh.getRange(1, 1, 1, def.header.length).setValues([def.header]).setFontWeight('bold').setBackground('#eef2f5');
       sh.setFrozenRows(1);
+    } else {
+      // 更新で列が増えたときは、空いている見出しだけ書き足す（データは消さない）
+      var cur = sh.getRange(1, 1, 1, def.header.length).getValues()[0];
+      def.header.forEach(function (h, i) {
+        if (!str_(cur[i])) sh.getRange(1, i + 1).setValue(h).setFontWeight('bold').setBackground('#eef2f5');
+      });
     }
   });
   seed_(SHEETS.stores.name, [['一', '一番町'], ['三', '三番町'], ['中', '中一万'], ['山', '山越'], ['松', '松山']]);
@@ -167,14 +173,27 @@ function getData(ym) {
         prefOffWeekdays: chars_(r[15]).map(function (c) { return WEEKDAYS.indexOf(c); }).filter(function (n) { return n >= 0; })
       };
     }).filter(function (s) { return s.id && s.name; }),
-    holidays: rows_('holidays').map(function (r) { return { date: date_(r[0]), name: str_(r[1]) }; }),
+    holidays: rows_('holidays').map(function (r) { return { date: date_(r[0]), name: str_(r[1]), store: str_(r[2]) }; }),
     extraOpen: rows_('extra').map(function (r) { return { date: date_(r[0]), store: str_(r[1]), slot: slot_(r[2]) }; }),
     dutyDates: rows_('duty').map(function (r) { return date_(r[0]); }),
-    specialPeriods: rows_('periods').map(function (r) { return { name: str_(r[0]), start: date_(r[1]), end: date_(r[2]) }; }),
+    specialPeriods: rows_('periods').map(function (r) {
+      return { name: str_(r[0]), start: date_(r[1]), end: date_(r[2]), targetOff: num_(r[3]), fillCode: str_(r[4]) || '有給' };
+    }),
     specialReqs: rows_('periodReqs').map(function (r) {
       return { period: str_(r[0]), store: str_(r[1]), dayType: str_(r[2]), slot: slot_(r[3]), pharm: num_(r[4]) || 0, clerk: num_(r[5]) || 0 };
     })
   };
+  // 前後の月の保存済みシフト（月をまたぐ特別期間の休日数を数えるため）
+  var p = ym.split('-'), adjacent = {};
+  [-1, 1].forEach(function (off) {
+    var d = new Date(+p[0], +p[1] - 1 + off, 1);
+    var c = readCells_('shift', Utilities.formatDate(d, TZ, 'yyyy-MM')) || {};
+    Object.keys(c).forEach(function (id) {
+      adjacent[id] = adjacent[id] || {};
+      Object.keys(c[id]).forEach(function (dt) { adjacent[id][dt] = c[id][dt]; });
+    });
+  });
+  master.adjacent = adjacent;
   return { ym: ym, master: master, requests: readCells_('requests', ym), cells: readCells_('shift', ym), version: monthVersion_(ym) };
 }
 

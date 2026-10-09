@@ -93,4 +93,33 @@ t('休みにしたい曜日（できれば）を優先して定休にする', ()
   const off = weds.filter(d => c3[q.id][d].AM === '定休').length;
   assert.ok(off >= 2, '水曜の定休 ' + off + '/3');
 });
+// 年末年始：店舗ごとに休業日が違う
+const MD = Object.assign({}, M, {
+  holidays: [
+    { date: '2027-01-01', name: '元日' }, { date: '2027-01-02', name: '年始休業' },
+    { date: '2026-12-29', name: '年末休業', store: '一' }, { date: '2026-12-30', name: '年末休業', store: '一' },
+    { date: '2026-12-31', name: '年末休業', store: '一' }, { date: '2026-12-31', name: '年末休業', store: '松' }
+  ],
+  dutyDates: [], extraOpen: [],
+  specialPeriods: [{ name: '年末年始', start: '2026-12-28', end: '2027-01-04', targetOff: 5, fillCode: '有給' }],
+  specialReqs: []
+});
+const cD = L.generate(MD, {}, 2026, 12);
+const vD = L.validate(MD, {}, cD, 2026, 12);
+t('店舗ごとの休業日：その店舗だけ誰も配置されない', () => {
+  for (const s of M.staff) for (const k of ['AM', 'PM']) {
+    assert.notStrictEqual(cD[s.id]['2026-12-29'][k], '一', s.name);
+    assert.notStrictEqual(cD[s.id]['2026-12-31'][k], '松', s.name);
+  }
+  assert.ok(M.staff.some(s => cD[s.id]['2026-12-29'].AM === '三'), '三番町は営業している');
+});
+t('特別期間の休日数を正社員でそろえる（足りない人は有給で補う）', () => {
+  const regs = M.staff.filter(s => s.kind === '常勤' || s.kind === '準常勤');
+  const sums = regs.map(s => ({ s, p: vD.summary[s.id].periods[0] }));
+  const mismatch = sums.filter(x => x.p.off !== 5);
+  // 合わないのは、自分の店舗の休業日が多く、応援にも出られない人（固定配置など）だけ
+  mismatch.forEach(x => assert.ok(x.p.off > 5 && (x.s.fixed || !(x.s.canStores || []).length), x.s.name + ' ' + x.p.off));
+  assert.ok(sums.filter(x => x.p.off === 5).length >= regs.length - 4);
+  assert.ok(regs.some(s => Object.values(cD[s.id]).some(c => c.AM === '有給')), '有給で補っている');
+});
 console.log(ok + ' passed');

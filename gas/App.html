@@ -165,11 +165,18 @@
     var h = '<thead><tr class="r1"><th class="sticky">氏名</th><th class="sticky2">区分</th>';
     days.forEach(function (x) {
       var c = [x.dow === 0 ? 'sun' : x.dow === 6 ? 'sat' : '', x.holiday ? 'hol' : '', x.duty ? 'duty' : '', x.special ? 'special' : '', S.hlDate === x.date ? 'hl' : ''].join(' ');
-      var title = [x.holiday, x.duty ? '夜間当番日' : '', x.special ? x.special.name : ''].filter(Boolean).join(' / ');
+      var closedStores = S.master.stores.filter(function (t) { return ctx.storeHol[x.date + '|' + t.code]; }).map(function (t) { return t.name; });
+      var title = [x.holiday, closedStores.length ? closedStores.join('・') + '休業' : '', x.duty ? '夜間当番日' : '', x.special ? x.special.name : ''].filter(Boolean).join(' / ');
+      if (closedStores.length) c += ' partclosed';
       h += '<th class="' + c + '" title="' + esc(title) + '"><span>' + x.d + '</span></th>';
     });
+    // 右端：休みの集計（公平性の確認用）
+    var extra = 2 + r.periods.length;
+    h += '<th class="tally" title="店舗の休業日・定休・休など">公休</th><th class="tally" title="有給・特休">有給等</th>';
+    r.periods.forEach(function (p) { h += '<th class="tally" title="' + esc(p.name) + 'の休み / そろえる日数">' + esc(p.name) + '</th>'; });
     h += '</tr><tr class="r2"><th class="sticky"></th><th class="sticky2"></th>';
     days.forEach(function (x) { h += '<th class="' + (x.dow === 0 || x.holiday ? 'sun' : x.dow === 6 ? 'sat' : '') + '">' + WD[x.dow] + '</th>'; });
+    for (var e = 0; e < extra; e++) h += '<th class="tally"></th>';
     h += '</tr></thead>';
 
     // 人数の集計
@@ -185,7 +192,7 @@
             var cl = c.have < c.min ? (c.soft ? 'soft' : 'short') : 'okc';
             h += '<td class="' + cl + '" title="' + c.have + '人 / 必要' + c.min + '人">' + c.have + '/' + c.min + '</td>';
           });
-          h += '</tr>';
+          h += '<td colspan="' + extra + '" class="tally"></td></tr>';
         });
       });
     });
@@ -196,9 +203,9 @@
         if (!c[n[1]] && !c[n[0]]) { h += '<td class="closed"></td>'; return; }
         h += '<td class="' + (c[n[0]] < c[n[1]] ? 'short' : 'okc') + '">' + c[n[0]] + '/' + c[n[1]] + '</td>';
       });
-      h += '</tr>';
+      h += '<td colspan="' + extra + '" class="tally"></td></tr>';
     });
-    h += '<tr class="gap"><td colspan="' + (days.length + 2) + '"></td></tr></tbody>';
+    h += '<tr class="gap"><td colspan="' + (days.length + 2 + extra) + '"></td></tr></tbody>';
 
     // 社員
     var view = S.mode === 'req' ? S.requests : S.cells;
@@ -239,6 +246,15 @@
           }
           h += '<td class="' + classes.join(' ') + '" data-id="' + esc(s.id) + '" data-date="' + x.date + '" data-row="' + row + '">' + html + '</td>';
         });
+        if (ri === 0) {
+          var sm = r.summary[s.id], reg = s.kind === '常勤' || s.kind === '準常勤';
+          h += '<td class="tally num" rowspan="' + rows.length + '">' + (reg ? sm.off : '') + '</td>';
+          h += '<td class="tally num" rowspan="' + rows.length + '">' + (reg && sm.leave ? sm.leave : '') + '</td>';
+          sm.periods.forEach(function (p) {
+            var cl = !reg ? '' : p.off === p.target ? 'okc' : p.off > p.target ? 'over' : 'under';
+            h += '<td class="tally num ' + cl + '" rowspan="' + rows.length + '">' + (reg ? p.off + '/' + p.target : '') + '</td>';
+          });
+        }
         h += '</tr>';
       });
     });
@@ -262,7 +278,9 @@
       '日付が黒：夜間当番日　黄色の日付：特別期間<br>' +
       '<b>記号</b>　※・重信：出勤扱いで店舗にいない　在宅：在宅勤務　入：深夜勤の前日の午後（勤務なし）　明：深夜勤明け　出：出勤希望（非常勤）<br>' +
       '<b>休み</b>　定休・休は週2日の公休。有給・特休（お盆など）は公休とは別に取る<br>' +
-      '<b>社員の設定</b>　氏名を押すと、週の出勤上限などを変更できます</div>';
+      '<b>社員の設定</b>　氏名を押すと、週の出勤上限などを変更できます<br>' +
+      '<b>右端の集計</b>　正社員の公休・有給等の日数。特別期間は「休み/そろえる日数」（黄＝少ない、青＝多い）<br>' +
+      '<b>日付の点線</b>　一部の店舗だけ休業（日付にマウスを乗せると店舗名）</div>';
     $('side').innerHTML = h;
   }
   function onSide(e) {

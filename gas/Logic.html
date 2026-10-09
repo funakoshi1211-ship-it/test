@@ -46,7 +46,12 @@ var ShiftLogic = (function () {
   function buildContext(M, y, m) {
     var ctx = { y: y, m: m, M: M, days: [], storeSet: {}, stores: M.stores.map(function (s) { return s.code; }) };
     ctx.stores.forEach(function (c) { ctx.storeSet[c] = true; });
-    var hol = {}; (M.holidays || []).forEach(function (h) { hol[h.date] = h.name || '祝日'; });
+    // 休業日。店舗が空欄なら全店舗、記号があればその店舗だけ
+    var hol = {}, storeHol = {};
+    (M.holidays || []).forEach(function (h) {
+      if (h.store) storeHol[h.date + '|' + h.store] = h.name || '休業日';
+      else hol[h.date] = h.name || '祝日';
+    });
     var duty = {}; (M.dutyDates || []).forEach(function (d) { duty[d] = true; });
     var extra = {};
     (M.extraOpen || []).forEach(function (e) {
@@ -62,7 +67,7 @@ var ShiftLogic = (function () {
         closed: w === 0 || !!hol[date] });
     }
     ctx.dayOf = {}; ctx.days.forEach(function (x) { ctx.dayOf[x.date] = x; });
-    ctx.hol = hol; ctx.dutySet = duty; ctx.extra = extra;
+    ctx.hol = hol; ctx.storeHol = storeHol; ctx.dutySet = duty; ctx.extra = extra;
     ctx.staff = M.staff.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
     ctx.staffById = {}; ctx.staff.forEach(function (s) { ctx.staffById[s.id] = s; });
 
@@ -82,10 +87,22 @@ var ShiftLogic = (function () {
     var day = ctx.dayOf[date];
     if (!day) return null;
     if (ctx.extra[date + '|' + store + '|' + slot]) return 'normal';
-    var normal = !day.closed && (day.dow !== 6 || slot === 'AM');
+    var normal = !day.closed && !ctx.storeHol[date + '|' + store] && (day.dow !== 6 || slot === 'AM');
     if (normal) return 'normal';
     if (day.duty && store === DUTY_STORE) return 'duty';
     return null;
+  }
+
+  // 月の外の日も含めて、その店舗がその日まるごと休みか（特別期間の休日数の見込みに使う）
+  function closedOn(ctx, store, date) {
+    if (ctx.extra[date + '|' + store + '|AM'] || ctx.extra[date + '|' + store + '|PM']) return false;
+    return dow(date) === 0 || !!ctx.hol[date] || !!ctx.storeHol[date + '|' + store];
+  }
+
+  // 正社員の休日数をそろえる特別期間（この月にかかるもの）
+  function targetPeriods(ctx) {
+    var first = ctx.days[0].date, last = ctx.days[ctx.days.length - 1].date;
+    return (ctx.M.specialPeriods || []).filter(function (p) { return +p.targetOff > 0 && p.start <= last && p.end >= first; });
   }
 
   function findReq(rows, store, dayType, slot) {
@@ -161,6 +178,18 @@ var ShiftLogic = (function () {
   }
   function workDaysInWeek(ctx, cells, id, wk) {
     return wk.days.filter(function (x) { return isWorkingCell(ctx, peek(cells, id, x.date)); }).length;
+  }
+
+  // 特別期間の休みの日数（店舗の休業日・定休・有給・特休などすべて）。
+  // 月の外の日は、保存済みのシフトがあればそれを、なければ店舗の休業日から見込む
+  function periodOff(ctx, cells, s, p) {
+    var adj = ctx.M.adjacent || {}, off = 0;
+    for (var d = p.start; d <= p.end; d = addDays(d, 1)) {
+      if (ctx.dayOf[d]) { if (!isWorkingCell(ctx, peek(cells, s.id, d))) off++; }
+      else if (adj[s.id] && adj[s.id][d]) { if (!isWorkingCell(ctx, adj[s.id][d])) off++; }
+      else if (s.home && closedOn(ctx, s.home, d)) off++;
+    }
+    return off;
   }
 
   // ---------- 自動作成 ----------
@@ -460,6 +489,72 @@ var ShiftLogic = (function () {
     }
     balance();
 
+    // 6b. 特別期間（年末年始など）の休日数を正社員でそろえる
+    targetPeriods(ctx).forEach(function (p) {
+      var target = +p.targetOff, fill = p.fillCode || '有給';
+      var inMonth = ctx.days.filter(function (x) { return x.date >= p.start && x.date <= p.end; });
+      function shortAt(store, date, k, role) {
+        var r = required(ctx, store, date, k, role);
+        return r ? r.min - countAt(ctx, cells, store, date, k, role) : 0;
+      }
+      function restOk(s, date) {
+        var wk = weekOf(ctx, date), need = Math.max(0, WEEK_OFF - wk.missing);
+        var rest = wk.days.filter(function (x) {
+          if (x.date === date) return false;
+          var c = peek(cells, s.id, x.date);
+          return !isWorkingCell(ctx, c) && !isLeaveDay(ctx, c);
+        }).length;
+        return rest >= need;
+      }
+      regulars.forEach(function (s) {
+        var off = periodOff(ctx, cells, s, p), guard = 0;
+        // 休みが多い人：自分の店舗が休業の日に、開いていて人が足りない店舗へ応援に出る
+        while (off > target && !s.fixed && guard++ < 31) {
+          var best = null, bestNeed = 0, bestStore = null;
+          inMonth.forEach(function (x) {
+            var c = peek(cells, s.id, x.date);
+            if (isWorkingCell(ctx, c) || dayLocked(s.id, x.date) || ngDay(s, x.date)) return;
+            if (!s.home || !closedOn(ctx, s.home, x.date)) return;
+            if (!restOk(s, x.date) || streakAround(ctx, cells, s.id, x.date) > MAX_STREAK) return;
+            allowedStores(s).forEach(function (st) {
+              if (st === s.home) return;
+              var need = 0;
+              SLOTS.forEach(function (k) { if (openKind(ctx, st, x.date, k) === 'normal') need += Math.max(0, shortAt(st, x.date, k, roleOf(s))); });
+              if (need > bestNeed) { bestNeed = need; best = x; bestStore = st; }
+            });
+          });
+          if (!best) break;
+          var cb = peek(cells, s.id, best.date);
+          SLOTS.forEach(function (k) { cb[k] = openKind(ctx, bestStore, best.date, k) === 'normal' ? bestStore : ''; });
+          stats[s.id].moves++;
+          off--;
+        }
+        // 休みが少ない人：人に余裕のある日から順に休み（既定は有給）を入れる
+        guard = 0;
+        while (off < target && guard++ < 31) {
+          var cand = inMonth.filter(function (x) {
+            var c = peek(cells, s.id, x.date);
+            return isStoreDay(ctx, c) && !dayLocked(s.id, x.date) && !c.N;
+          });
+          if (!cand.length) break;
+          var slack = function (x) {
+            var c = peek(cells, s.id, x.date), worst = Infinity;
+            SLOTS.forEach(function (k) {
+              if (!isStore(ctx, c[k])) return;
+              var r = required(ctx, c[k], x.date, k, roleOf(s));
+              var sl = countAt(ctx, cells, c[k], x.date, k, roleOf(s)) - (r ? r.min : 0);
+              if (sl < worst) worst = sl;
+            });
+            return worst;
+          };
+          cand.sort(function (a, b) { return slack(b) - slack(a); });
+          var cc = peek(cells, s.id, cand[0].date);
+          SLOTS.forEach(function (k) { if (isStore(ctx, cc[k])) cc[k] = fill; });
+          off++;
+        }
+      });
+    });
+
     // 7. 非常勤で不足を埋める
     ctx.days.forEach(function (x) {
       var wk = weekOf(ctx, x.date);
@@ -616,11 +711,27 @@ var ShiftLogic = (function () {
       });
     });
 
+    // 休みの集計（公平性の確認用）
+    var summary = {}, periods = targetPeriods(ctx);
+    ctx.staff.forEach(function (s) {
+      var off = 0, leave = 0;
+      ctx.days.forEach(function (x) {
+        var c = peek(cells, s.id, x.date);
+        if (isWorkingCell(ctx, c)) return;
+        if (isLeaveDay(ctx, c)) leave++; else off++;
+      });
+      var ps = periods.map(function (p) { return { name: p.name, off: periodOff(ctx, cells, s, p), target: +p.targetOff }; });
+      summary[s.id] = { off: off, leave: leave, periods: ps };
+      if (isRegular(s)) ps.forEach(function (q) {
+        if (q.off !== q.target) add('warn', s.name + '：' + q.name + 'の休みが' + q.off + '日（目標' + q.target + '日）', s.id, null);
+      });
+    });
+
     issues.sort(function (a, b) {
       var la = a.level === 'error' ? 0 : 1, lb = b.level === 'error' ? 0 : 1;
       return la - lb || String(a.date).localeCompare(String(b.date));
     });
-    return { counts: counts, night: night, issues: issues, ctx: ctx };
+    return { counts: counts, night: night, issues: issues, ctx: ctx, summary: summary, periods: periods };
   }
 
   return {
