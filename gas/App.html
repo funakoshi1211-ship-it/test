@@ -41,15 +41,24 @@
     status('読み込み中…');
     call('getData', S.ym).then(function (d) {
       S.master = d.master; S.requests = d.requests || {}; S.cells = d.cells || {};
+      S.version = d.version || null;
       S.dirty = false;
       if (!S.master.staff.length) toast('「社員」シートに社員が登録されていません');
       refresh();
       status(d.cells ? '保存済みのシフトを読み込みました' : 'シフトは未作成です。「自動作成」を押してください');
     }).catch(function (e) { status(''); alert('読み込みに失敗しました：' + (e && e.message || e)); });
   }
-  function save() {
+  function save(force) {
     status('保存中…');
-    Promise.all([call('saveRequests', S.ym, S.requests), call('saveShift', S.ym, S.cells)]).then(function () {
+    call('saveMonth', S.ym, S.requests, S.cells, S.version ? S.version.id : '', !!force).then(function (r) {
+      if (r && r.conflict) {
+        status('');
+        var who = (r.by || '別の人') + '（' + r.at + '）';
+        if (confirm('読み込んだあとに ' + who + ' がこの月を保存しています。\n\n' +
+          '「OK」：自分の内容で上書きする（相手の変更は消えます）\n「キャンセル」：保存せずに戻る（「読み込み」で最新を確認できます）')) save(true);
+        return;
+      }
+      if (r && r.version) S.version = r.version;
       S.dirty = false;
       status(DEMO ? 'デモのため保存されません' : '保存しました');
       toast(DEMO ? 'デモのため保存されません' : '保存しました');
@@ -325,7 +334,7 @@
     $('btnLoad').onclick = load;
     $('ym').onchange = load;
     $('btnGen').onclick = generate;
-    $('btnSave').onclick = save;
+    $('btnSave').onclick = function () { save(false); };
     $('btnPrint').onclick = printSheet;
     $('modeSeg').onclick = function (e) { var b = e.target.closest('button'); if (b) setMode(b.dataset.mode); };
     $('palette').onclick = onPalette;

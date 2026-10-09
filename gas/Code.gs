@@ -175,7 +175,7 @@ function getData(ym) {
       return { period: str_(r[0]), store: str_(r[1]), dayType: str_(r[2]), slot: slot_(r[3]), pharm: num_(r[4]) || 0, clerk: num_(r[5]) || 0 };
     })
   };
-  return { ym: ym, master: master, requests: readCells_('requests', ym), cells: readCells_('shift', ym) };
+  return { ym: ym, master: master, requests: readCells_('requests', ym), cells: readCells_('shift', ym), version: monthVersion_(ym) };
 }
 
 function readCells_(key, ym) {
@@ -191,30 +191,53 @@ function readCells_(key, ym) {
 }
 
 // ---------- 保存 ----------
-function saveRequests(ym, map) { writeCells_('requests', ym, map); return true; }
-function saveShift(ym, map) { writeCells_('shift', ym, map); return true; }
+function saveRequests(ym, map) { return withLock_(function () { writeCells_('requests', ym, map); return true; }); }
+function saveShift(ym, map) { return withLock_(function () { writeCells_('shift', ym, map); return true; }); }
+
+// ---------- 複数人で使うときの上書き防止 ----------
+// 月ごとに「最後に保存した人と時刻」を持ち、読み込んだ後に他の人が保存していたら知らせる
+function monthVersion_(ym) {
+  var raw = PropertiesService.getDocumentProperties().getProperty('ver_' + ym);
+  return raw ? JSON.parse(raw) : null;
+}
+function currentUser_() {
+  try { return Session.getActiveUser().getEmail() || ''; } catch (e) { return ''; }
+}
+// baseId：読み込んだときの版。force：他の人の保存を上書きしてよいとき true
+function saveMonth(ym, requests, cells, baseId, force) {
+  return withLock_(function () {
+    var cur = monthVersion_(ym);
+    if (cur && cur.id !== baseId && !force) return { conflict: true, by: cur.by, at: cur.at };
+    writeCells_('requests', ym, requests);
+    writeCells_('shift', ym, cells);
+    var ver = { id: Utilities.getUuid(), by: currentUser_(), at: Utilities.formatDate(new Date(), TZ, 'M/d HH:mm') };
+    PropertiesService.getDocumentProperties().setProperty('ver_' + ym, JSON.stringify(ver));
+    return { ok: true, version: ver };
+  });
+}
 
 function writeCells_(key, ym, map) {
+  // 呼び出し側でロックを取ってから呼ぶこと
+  var sh = SpreadsheetApp.getActive().getSheetByName(SHEETS[key].name);
+  var width = SHEETS[key].header.length;
+  var keep = rows_(key).filter(function (r) { return ym_(r[0]) !== ym; })
+    .map(function (r) { return [ym_(r[0]), str_(r[1]), date_(r[2]), str_(r[3]), str_(r[4]), str_(r[5])]; });
+  var add = [];
+  Object.keys(map || {}).forEach(function (id) {
+    Object.keys(map[id]).sort().forEach(function (d) {
+      var c = map[id][d];
+      if (c.AM || c.PM || c.N) add.push([ym, id, d, c.AM || '', c.PM || '', c.N || '']);
+    });
+  });
+  var all = keep.concat(add);
+  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, width).clearContent();
+  if (all.length) sh.getRange(2, 1, all.length, width).setNumberFormat('@').setValues(all);
+}
+
+function withLock_(fn) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
-  try {
-    var sh = SpreadsheetApp.getActive().getSheetByName(SHEETS[key].name);
-    var width = SHEETS[key].header.length;
-    var keep = rows_(key).filter(function (r) { return ym_(r[0]) !== ym; })
-      .map(function (r) { return [ym_(r[0]), str_(r[1]), date_(r[2]), str_(r[3]), str_(r[4]), str_(r[5])]; });
-    var add = [];
-    Object.keys(map || {}).forEach(function (id) {
-      Object.keys(map[id]).sort().forEach(function (d) {
-        var c = map[id][d];
-        if (c.AM || c.PM || c.N) add.push([ym, id, d, c.AM || '', c.PM || '', c.N || '']);
-      });
-    });
-    var all = keep.concat(add);
-    if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, width).clearContent();
-    if (all.length) sh.getRange(2, 1, all.length, width).setNumberFormat('@').setValues(all);
-  } finally {
-    lock.releaseLock();
-  }
+  try { return fn(); } finally { lock.releaseLock(); }
 }
 
 // 社員の設定（画面から変更した項目だけ書き戻す）
