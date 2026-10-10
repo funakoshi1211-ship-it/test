@@ -10,7 +10,7 @@ var TZ = 'Asia/Tokyo';
 
 var SHEETS = {
   stores: { name: '店舗', header: ['記号', '店舗名'] },
-  reqs: { name: '必要人数', header: ['店舗記号', '曜日区分（平日/土曜/当番）', '時間帯（午前/午後）', '薬剤師', '事務'] },
+  reqs: { name: '必要人数', header: ['店舗記号', '曜日区分（平日/土曜/日祝/当番）', '時間帯（午前/午後）', '薬剤師', '事務'] },
   staff: {
     name: '社員',
     header: ['ID', '氏名', '職種（管薬/薬/事務）', '区分（常勤/準常勤/非常勤/外部）', '所属店舗（記号）', '固定（○）',
@@ -21,7 +21,7 @@ var SHEETS = {
   extra: { name: '臨時営業', header: ['日付', '店舗記号', '時間帯（午前/午後/終日）', 'メモ'] },
   duty: { name: '夜間当番日', header: ['日付'] },
   periods: { name: '特別期間', header: ['名称', '開始日', '終了日', '正社員の公休数（そろえる日数）', '公休が多い人の扱い（有給/応援/なし）'] },
-  periodReqs: { name: '特別期間の必要人数', header: ['特別期間の名称', '店舗記号', '曜日区分（平日/土曜/当番）', '時間帯（午前/午後）', '薬剤師', '事務'] },
+  periodReqs: { name: '特別期間の必要人数', header: ['特別期間の名称', '店舗記号', '曜日区分（平日/土曜/日祝/当番）', '時間帯（午前/午後）', '薬剤師', '事務'] },
   requests: { name: '希望', header: ['年月', '社員ID', '日付', '午前', '午後', '夜'] },
   shift: { name: 'シフト', header: ['年月', '社員ID', '日付', '午前', '午後', '夜'] }
 };
@@ -144,7 +144,7 @@ function setValidation_() {
   list(SHEETS.staff.name, 8, ['○']);
   list(SHEETS.staff.name, 17, ['午前のみ', '午後のみ']);
   list(SHEETS.reqs.name, 1, stores);
-  list(SHEETS.reqs.name, 2, ['平日', '土曜', '当番']);
+  list(SHEETS.reqs.name, 2, ['平日', '土曜', '日祝', '当番']);
   list(SHEETS.reqs.name, 3, ['午前', '午後']);
   list(SHEETS.holidays.name, 3, stores);
   list(SHEETS.extra.name, 2, stores);

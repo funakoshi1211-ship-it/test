@@ -181,4 +181,18 @@ t('支回は出勤扱いだが、店舗の人数に数えない', () => {
   const before = v.counts['一'][d].AM.pharm.have - (stores.includes(cells[a.id][d].AM) ? 1 : 0);
   assert.strictEqual(v6.counts['一'][d].AM.pharm.have, before);
 });
+t('日曜の半日営業（臨時営業・午前）：必要な人数だけ入り、1日の出勤として代休が付く', () => {
+  const M7 = Object.assign({}, M, { extraOpen: [{ date: '2026-08-23', store: '中', slot: 'AM' }] });
+  const c7 = L.generate(M7, R, 2026, 8);
+  const v7 = L.validate(M7, R, c7, 2026, 8);
+  const d = '2026-08-23';
+  const ph = M.staff.filter(s => s.job !== '事務' && c7[s.id][d].AM === '中');
+  const cl = M.staff.filter(s => s.job === '事務' && c7[s.id][d].AM === '中');
+  assert.strictEqual(ph.length, 2, '薬剤師は土曜と同じ2人'); assert.strictEqual(cl.length, 1, '事務は1人');
+  assert.ok(M.staff.every(s => c7[s.id][d].PM !== '中'), '午後は営業しない');
+  const regs = ph.concat(cl).filter(s => s.kind === '常勤' || s.kind === '準常勤');
+  const wk = ['2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29'];
+  regs.forEach(s => assert.ok(wk.some(x => c7[s.id][x].AM === '代休'), s.name + ' に代休'));
+  assert.ok(!v7.issues.some(i => i.level === 'error' && /連勤|公休/.test(i.msg)), JSON.stringify(v7.issues.filter(i => /連勤|公休/.test(i.msg))));
+});
 console.log(ok + ' passed');

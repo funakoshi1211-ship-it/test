@@ -249,16 +249,18 @@ var ShiftLogic = (function () {
   function openKind(ctx, store, date, slot) {
     var day = ctx.dayOf[date];
     if (!day) return null;
-    if (ctx.extra[date + '|' + store + '|' + slot]) return 'normal';
     var normal = !day.closed && !ctx.storeHol[date + '|' + store] && (day.dow !== 6 || slot === 'AM');
     if (normal) return 'normal';
+    // 臨時営業（日曜の半日営業など）：必要な人数だけ配置する
+    if (ctx.extra[date + '|' + store + '|' + slot]) return 'extra';
     if (day.duty && store === DUTY_STORE) return 'duty';
     return null;
   }
 
   // 月の外の日も含めて、その店舗がその日まるごと休みか（特別期間の休日数の見込みに使う）
-  function closedOn(ctx, store, date) {
-    if (ctx.extra[date + '|' + store + '|AM'] || ctx.extra[date + '|' + store + '|PM']) return false;
+  // ignoreExtra：臨時営業でも「本来は休み（日曜・祝日・休業日）」として見る（代休の判定に使う）
+  function closedOn(ctx, store, date, ignoreExtra) {
+    if (!ignoreExtra && (ctx.extra[date + '|' + store + '|AM'] || ctx.extra[date + '|' + store + '|PM'])) return false;
     return dow(date) === 0 || !!ctx.hol[date] || !!ctx.storeHol[date + '|' + store];
   }
 
@@ -281,13 +283,15 @@ var ShiftLogic = (function () {
     var kind = openKind(ctx, store, date, slot);
     if (!kind) return null;
     var day = ctx.dayOf[date];
-    var dayType = kind === 'duty' ? '当番' : (day.dow === 6 ? '土曜' : '平日');
+    // 臨時営業の日曜・祝日は「日祝」の行、なければ「土曜」の行の人数を使う
+    var dayType = kind === 'duty' ? '当番' : kind === 'extra' && (day.closed || day.dow === 6) ? '日祝' : (day.dow === 6 ? '土曜' : '平日');
     var row = null, soft = false;
     if (day.special) {
       soft = true;
       row = findReq((ctx.M.specialReqs || []).filter(function (r) { return r.period === day.special.name; }), store, dayType, slot);
     }
     if (!row) row = findReq(ctx.M.requirements || [], store, dayType, slot);
+    if (!row && dayType === '日祝') row = findReq(ctx.M.requirements || [], store, '土曜', 'AM');
     if (!row && kind === 'duty') row = { pharm: 1, clerk: 0 };
     if (!row) return { min: 0, soft: soft };
     return { min: +(role === 'pharm' ? row.pharm : row.clerk) || 0, soft: soft };
@@ -468,6 +472,41 @@ var ShiftLogic = (function () {
       }
     });
 
+    // 2b. 臨時営業（日曜の半日営業など）：必要な人数だけ、その店舗の人から順に入れる
+    var extraCount = {};
+    ctx.days.forEach(function (x) {
+      ctx.stores.forEach(function (st) {
+        SLOTS.forEach(function (k) {
+          if (openKind(ctx, st, x.date, k) !== 'extra') return;
+          ['pharm', 'clerk'].forEach(function (role) {
+            var r = required(ctx, st, x.date, k, role);
+            var have = countAt(ctx, cells, st, x.date, k, role);
+            if (!r) return;
+            var cand = ctx.staff.filter(function (s) {
+              if (roleOf(s) !== role || isExternal(s)) return false;
+              if (allowedStores(s).indexOf(st) < 0) return false;
+              if (s.slotOnly && s.slotOnly !== k) return false;
+              var c = peek(cells, s.id, x.date);
+              if (c[k] || c.N || locked(s.id, x.date, k) || ngDay(s, x.date)) return false;
+              return isWorkingCell(ctx, c) || streakAround(ctx, cells, s.id, x.date) <= MAX_STREAK;
+            }).sort(function (a, b) {
+              // 同じ日のもう一方の時間帯に入っている人 → 所属店舗の人 → 正社員 → 回数の少ない人
+              var wa = isStore(ctx, peek(cells, a.id, x.date)[k === 'AM' ? 'PM' : 'AM']) ? 0 : 1;
+              var wb = isStore(ctx, peek(cells, b.id, x.date)[k === 'AM' ? 'PM' : 'AM']) ? 0 : 1;
+              var ha = a.home === st ? 0 : 1, hb = b.home === st ? 0 : 1;
+              var ra = isRegular(a) ? 0 : 1, rb = isRegular(b) ? 0 : 1;
+              return wa - wb || ha - hb || ra - rb || (extraCount[a.id] || 0) - (extraCount[b.id] || 0);
+            });
+            for (var i = 0; i < cand.length && have < r.min; i++) {
+              peek(cells, cand[i].id, x.date)[k] = st;
+              extraCount[cand[i].id] = (extraCount[cand[i].id] || 0) + 1;
+              have++;
+            }
+          });
+        });
+      });
+    });
+
     // 3. 常勤の休み（週2日）を決める
     var regulars = ctx.staff.filter(isRegular);
     // 全員が出勤した場合の人数の見込み
@@ -518,7 +557,7 @@ var ShiftLogic = (function () {
         var need = Math.max(0, WEEK_OFF - off - wk.missing);
         // 日曜・祝日（自分の店舗の休業日）に出勤した日数。その分の休みは「代休」にする
         var workedClosed = wk.days.filter(function (x) {
-          return s.home && closedOn(ctx, s.home, x.date) && isWorkingCell(ctx, peek(cells, s.id, x.date));
+          return s.home && closedOn(ctx, s.home, x.date, true) && isWorkingCell(ctx, peek(cells, s.id, x.date));
         }).length;
         for (var i = 0; i < need; i++) {
           var cand = wk.days.filter(function (x) {
@@ -926,7 +965,7 @@ var ShiftLogic = (function () {
       summary[s.id] = { off: off, leave: leave, periods: ps, eve: eve, late: late, dutyDay: dutyDay };
       // 日曜・祝日に出勤したら、同じ週か翌週に代休
       if (isRegular(s) && s.home) ctx.weeks.forEach(function (wk, wi) {
-        var worked = wk.days.filter(function (x) { return closedOn(ctx, s.home, x.date) && isWorkingCell(ctx, peek(cells, s.id, x.date)); });
+        var worked = wk.days.filter(function (x) { return closedOn(ctx, s.home, x.date, true) && isWorkingCell(ctx, peek(cells, s.id, x.date)); });
         if (!worked.length) return;
         var next = ctx.weeks[wi + 1];
         if (!next || next.days.length < 7) return; // 翌週が月をまたぐときは判定しない
