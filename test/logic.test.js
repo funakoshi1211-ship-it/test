@@ -157,4 +157,28 @@ t('手入力の文字（先頭が店舗記号）はその店舗の人数に数�
   assert.strictEqual(v5.counts['三'][d].AM.pharm.have, before + (cells[k.id][d].AM === '三' ? 0 : 1));
   assert.ok(!v5.issues.some(i => i.id === k.id && i.date === d && i.level === 'error'), '手入力の文字でエラーにならない');
 });
+t('午前のみの非常勤は午後に入らない', () => {
+  const m = M.staff.find(s => s.name === '薬剤師M');
+  Object.keys(cells[m.id]).forEach(d => assert.ok(!stores.includes(cells[m.id][d].PM), d));
+});
+t('日曜・祝日に出勤した人には、その週の追加の休みが「代休」で入る', () => {
+  // 8/9（日）の当番日中に入った人
+  const p = M.staff.filter(s => cells[s.id]['2026-08-09'] && cells[s.id]['2026-08-09'].AM === '三' && (s.kind === '常勤' || s.kind === '準常勤'));
+  assert.ok(p.length >= 1);
+  p.forEach(s => {
+    const wk = ['2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15', '2026-08-16', '2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21', '2026-08-22'];
+    const dai = wk.filter(d => cells[s.id][d] && cells[s.id][d].AM === '代休').length;
+    const warn = v.issues.some(i => i.id === s.id && i.msg.includes('代休'));
+    assert.ok(dai >= 1 || warn, s.name + ' に代休も警告もない');
+  });
+});
+t('支回は出勤扱いだが、店舗の人数に数えない', () => {
+  const c6 = JSON.parse(JSON.stringify(cells));
+  const a = M.staff.find(s => s.name === '管薬A');
+  const d = '2026-08-05';
+  c6[a.id][d] = { AM: '支回', PM: '支回', N: '' };
+  const v6 = L.validate(M, R, c6, 2026, 8);
+  const before = v.counts['一'][d].AM.pharm.have - (stores.includes(cells[a.id][d].AM) ? 1 : 0);
+  assert.strictEqual(v6.counts['一'][d].AM.pharm.have, before);
+});
 console.log(ok + ' passed');

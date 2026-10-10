@@ -32,7 +32,7 @@ var SAMPLE = (function () {
       id: 'S' + (++n), order: n, name: name, job: job, kind: kind, home: home,
       fixed: !!opt.fixed, canStores: opt.can || [], night: !!opt.night, ngWeekdays: opt.ng || [],
       weeklyMax: opt.max || null, weeklyStoreMax: opt.storeMax || null, weeklyRemote: opt.remote || 0,
-      endWeekday: opt.endWd || '', endSat: opt.endSat || ''
+      endWeekday: opt.endWd || '', endSat: opt.endSat || '', slotOnly: opt.slot || ''
     };
   }
   var staff = [
@@ -48,7 +48,7 @@ var SAMPLE = (function () {
     st('薬剤師J', '薬', '準常勤', '三', { can: ['松'], endWd: '16:15', endSat: '13:00' }),
     st('薬剤師K', '薬', '非常勤', '松', { max: 2 }),
     st('薬剤師L', '薬', '非常勤', '山', { max: 2 }),
-    st('薬剤師M', '薬', '非常勤', '山', { max: 2 }),
+    st('薬剤師M', '薬', '非常勤', '山', { max: 4, slot: 'AM' }),
     st('薬剤師N', '薬', '非常勤', '山', { can: ['松', '一'], max: 2 }),
     st('薬剤師O', '薬', '非常勤', '中', { max: 2 }),
     st('夜勤P', '薬', '外部', '三', { night: true }),

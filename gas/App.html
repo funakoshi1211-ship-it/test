@@ -101,7 +101,7 @@
   // ---------- 入力 ----------
   function paletteCodes() {
     var stores = S.master ? S.master.stores.map(function (s) { return s.code; }) : [];
-    var codes = [{ g: '店舗', list: stores }, { g: '店舗外', list: AWAY }, { g: '休み', list: ['定休', '休', '有給', '特休', '×'] }, { g: '夜勤', list: ['準夜', '深夜'] }];
+    var codes = [{ g: '店舗', list: stores }, { g: '店舗外', list: AWAY }, { g: '休み', list: ['定休', '休', '代休', '有給', '特休', '×'] }, { g: '夜勤', list: ['準夜', '深夜'] }];
     if (S.mode === 'req') codes.splice(1, 0, { g: '希望', list: ['出'] });
     return codes;
   }
@@ -213,8 +213,9 @@
       h += '<th class="' + c + '" title="' + esc(title) + '"><span>' + x.d + '</span></th>';
     });
     // 右端：休みの集計（公平性の確認用）
-    var extra = 2 + r.periods.length;
-    h += '<th class="tally" title="店舗の休業日・定休・休など">公休</th><th class="tally" title="有給・特休">有給等</th>';
+    var extra = 5 + r.periods.length;
+    h += '<th class="tally" title="店舗の休業日・定休・休・代休など">公休</th><th class="tally" title="有給・特休">有給等</th>';
+    h += '<th class="tally" title="準夜勤（16-24）の回数">準夜</th><th class="tally" title="深夜勤（0-9）の回数">深夜</th><th class="tally" title="日曜・祝日・土曜午後の当番日中の回数">当番日中</th>';
     r.periods.forEach(function (p) { h += '<th class="tally" title="' + esc(p.name) + 'の休み / そろえる日数">' + esc(p.name) + '</th>'; });
     h += '</tr><tr class="r2"><th class="sticky"></th><th class="sticky2"></th>';
     days.forEach(function (x) { h += '<th class="' + (x.dow === 0 || x.holiday ? 'sun' : x.dow === 6 ? 'sat' : '') + '">' + WD[x.dow] + '</th>'; });
@@ -259,7 +260,7 @@
         h += '<tr class="' + trc + '">';
         if (ri === 0) {
           var sub = [s.job, s.kind, s.fixed ? '固定' : ''].filter(Boolean).join('・');
-          var note = s.kind === '非常勤' && s.weeklyMax ? '週' + s.weeklyMax + '日まで' : s.fixed ? '固定' : '';
+          var note = s.kind === '非常勤' ? [s.weeklyMax ? '週' + s.weeklyMax + '日まで' : '', s.slotOnly === 'AM' ? '午前のみ' : s.slotOnly === 'PM' ? '午後のみ' : ''].filter(Boolean).join('・') : s.fixed ? '固定' : '';
           h += '<th class="sticky name' + (S.hlId === s.id ? ' hl' : '') + '" rowspan="' + rows.length + '" data-staff="' + esc(s.id) + '" title="' + esc(sub) + '（押すと設定を変更）">' +
             esc(s.name) + (note ? '<small>' + esc(note) + '</small>' : '') + '</th>';
         }
@@ -292,6 +293,7 @@
           var sm = r.summary[s.id], reg = s.kind === '常勤' || s.kind === '準常勤';
           h += '<td class="tally num" rowspan="' + rows.length + '">' + (reg ? sm.off : '') + '</td>';
           h += '<td class="tally num" rowspan="' + rows.length + '">' + (reg && sm.leave ? sm.leave : '') + '</td>';
+          [sm.eve, sm.late, sm.dutyDay].forEach(function (n) { h += '<td class="tally num" rowspan="' + rows.length + '">' + (n || '') + '</td>'; });
           sm.periods.forEach(function (p) {
             var cl = !reg ? '' : p.off === p.target ? 'okc' : p.off > p.target ? 'over' : 'under';
             h += '<td class="tally num ' + cl + '" rowspan="' + rows.length + '">' + (reg ? p.off + '/' + p.target : '') + '</td>';
@@ -318,7 +320,7 @@
       '茶色の枠：希望入力で決まっている枠（自動作成で変わらない）<br>' +
       '赤い枠：その日にルール違反がある<br>' +
       '日付が黒：夜間当番日　黄色の日付：特別期間<br>' +
-      '<b>記号</b>　※・重信：出勤扱いで店舗にいない　在宅：在宅勤務　夜：準夜勤の日の日中（勤務なし・人数に数えない）　入：深夜勤の前日の午後（勤務なし）　明：深夜勤明け　出：出勤希望（非常勤）<br>' +
+      '<b>記号</b>　※・重信・支回：出勤扱いで店舗にいない（人数に数えない）　代休：日曜・祝日に出勤した分の休み（公休）　在宅：在宅勤務　夜：準夜勤の日の日中（勤務なし・人数に数えない）　入：深夜勤の前日の午後（勤務なし）　明：深夜勤明け　出：出勤希望（非常勤）<br>' +
       '<b>休み</b>　定休・休は週2日の公休。有給・特休（お盆など）は公休とは別に取る<br>' +
       '<b>社員の設定</b>　氏名を押すと、週の出勤上限などを変更できます<br>' +
       '<b>右端の集計</b>　正社員の公休・有給等の日数。特別期間は「休み/そろえる日数」（黄＝少ない、青＝多い）<br>' +
@@ -360,6 +362,7 @@
       return '<label><input type="checkbox" name="pref" value="' + i + '"' + ((s.prefOffWeekdays || []).indexOf(i) >= 0 ? ' checked' : '') + '>' + w + '</label>';
     }).join('');
     f.weeklyMax.value = s.weeklyMax || '';
+    f.slotOnly.value = s.slotOnly || '';
     f.weeklyStoreMax.value = s.weeklyStoreMax || '';
     f.weeklyRemote.value = s.weeklyRemote || '';
     $('staffDlg').showModal();
@@ -377,6 +380,7 @@
       .filter(function (c) { return c !== s.home; });
     s.ngWeekdays = Array.prototype.map.call(f.querySelectorAll('input[name=ng]:checked'), function (i) { return +i.value; });
     s.prefOffWeekdays = Array.prototype.map.call(f.querySelectorAll('input[name=pref]:checked'), function (i) { return +i.value; });
+    s.slotOnly = f.slotOnly.value;
     s.weeklyMax = num(f.weeklyMax.value);
     s.weeklyStoreMax = num(f.weeklyStoreMax.value);
     s.weeklyRemote = num(f.weeklyRemote.value) || 0;

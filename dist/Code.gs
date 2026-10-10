@@ -15,7 +15,7 @@ var SHEETS = {
     name: '社員',
     header: ['ID', '氏名', '職種（管薬/薬/事務）', '区分（常勤/準常勤/非常勤/外部）', '所属店舗（記号）', '固定（○）',
       '応援できる店舗（記号を並べる）', '夜勤可（○）', '出勤できない曜日（例：水土）', '週の出勤上限（非常勤）',
-      '週の店舗出勤上限', '週の在宅日数', '平日の終業時刻', '土曜の終業時刻', '表示順', '休みにしたい曜日（できれば）']
+      '週の店舗出勤上限', '週の在宅日数', '平日の終業時刻', '土曜の終業時刻', '表示順', '休みにしたい曜日（できれば）', '勤務できる時間帯（午前のみ/午後のみ）']
   },
   holidays: { name: '祝日・休業日', header: ['日付', '名称', '店舗記号（空欄＝全店舗）'] },
   extra: { name: '臨時営業', header: ['日付', '店舗記号', '時間帯（午前/午後/終日）', 'メモ'] },
@@ -142,6 +142,7 @@ function setValidation_() {
   list(SHEETS.staff.name, 5, stores);
   list(SHEETS.staff.name, 6, ['○']);
   list(SHEETS.staff.name, 8, ['○']);
+  list(SHEETS.staff.name, 17, ['午前のみ', '午後のみ']);
   list(SHEETS.reqs.name, 1, stores);
   list(SHEETS.reqs.name, 2, ['平日', '土曜', '当番']);
   list(SHEETS.reqs.name, 3, ['午前', '午後']);
@@ -194,7 +195,8 @@ function getData(ym) {
         ngWeekdays: chars_(r[8]).map(function (c) { return WEEKDAYS.indexOf(c); }).filter(function (n) { return n >= 0; }),
         weeklyMax: num_(r[9]), weeklyStoreMax: num_(r[10]), weeklyRemote: num_(r[11]) || 0,
         endWeekday: str_(r[12]), endSat: str_(r[13]), order: num_(r[14]) || (i + 1),
-        prefOffWeekdays: chars_(r[15]).map(function (c) { return WEEKDAYS.indexOf(c); }).filter(function (n) { return n >= 0; })
+        prefOffWeekdays: chars_(r[15]).map(function (c) { return WEEKDAYS.indexOf(c); }).filter(function (n) { return n >= 0; }),
+        slotOnly: str_(r[16]) === '午前のみ' ? 'AM' : str_(r[16]) === '午後のみ' ? 'PM' : ''
       };
     }).filter(function (s) { return s.id && s.name; }),
     holidays: rows_('holidays').map(function (r) { return { date: date_(r[0]), name: str_(r[1]), store: str_(r[2]) }; }),
@@ -299,10 +301,16 @@ function saveStaff(s) {
       s.weeklyMax == null ? '' : s.weeklyMax, s.weeklyStoreMax == null ? '' : s.weeklyStoreMax, s.weeklyRemote || ''
     ];
     sh.getRange(i + 2, 4, 1, row.length).setValues([row]);
-    var prefCol = SHEETS.staff.header.length;
-    if (!str_(sh.getRange(1, prefCol).getValue())) sh.getRange(1, prefCol).setValue(SHEETS.staff.header[prefCol - 1]).setFontWeight('bold').setBackground('#eef2f5');
-    sh.getRange(i + 2, prefCol).setNumberFormat('@')
-      .setValue((s.prefOffWeekdays || []).map(function (n) { return WEEKDAYS.charAt(n); }).join(''));
+    // P列：休みにしたい曜日、Q列：勤務できる時間帯（見出しが無ければ書き足す）
+    var extraCols = {
+      16: (s.prefOffWeekdays || []).map(function (n) { return WEEKDAYS.charAt(n); }).join(''),
+      17: s.slotOnly === 'AM' ? '午前のみ' : s.slotOnly === 'PM' ? '午後のみ' : ''
+    };
+    Object.keys(extraCols).forEach(function (col) {
+      col = +col;
+      if (!str_(sh.getRange(1, col).getValue())) sh.getRange(1, col).setValue(SHEETS.staff.header[col - 1]).setFontWeight('bold').setBackground('#eef2f5');
+      sh.getRange(i + 2, col).setNumberFormat('@').setValue(extraCols[col]);
+    });
     return true;
   }
   throw new Error('社員が見つかりません：' + s.id);
@@ -337,8 +345,10 @@ function exportPrint(ym, cells, note) {
     dates.forEach(function (x) {
       var c = (cells[s.id] && cells[s.id][x]) || {};
       // 夜勤の日は時間だけを書く（深夜勤：午前の段に 0-9、準夜勤：午後の段に 16-24）
-      am.push(c.N === '深夜' ? '0-9' : printable_(c.AM));
-      pm.push(c.N === '準夜' ? '16-24' : printable_(c.PM));
+      // 日曜・祝日の当番日の日中（三番町）は時刻で書く
+      var dutyDay = duty[x] && (new Date(x + 'T00:00:00').getDay() === 0 || hol[x]);
+      am.push(c.N === '深夜' ? '0-9' : dutyDay && c.AM === '三' ? '8:30' : printable_(c.AM));
+      pm.push(c.N === '準夜' ? '16-24' : dutyDay && c.PM === '三' ? '16:00' : printable_(c.PM));
     });
     values.push(am, pm);
   });
