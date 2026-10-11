@@ -216,8 +216,14 @@ var ShiftLogic = (function () {
   function roleOf(s) { return s.job === '事務' ? 'clerk' : 'pharm'; }
   function isRegular(s) { return s.kind === '常勤' || s.kind === '準常勤'; }
   function isExternal(s) { return s.kind === '外部'; }
+  var ALL_STORES = [];
   function allowedStores(s) {
     var list = s.home ? [s.home] : [];
+    // 固定でない正社員の薬剤師は、「応援できる店舗」が空欄ならすべての店舗に応援できる
+    if (!s.fixed && s.job !== '事務' && isRegular(s) && !(s.canStores || []).length) {
+      ALL_STORES.forEach(function (c) { if (list.indexOf(c) < 0) list.push(c); });
+      return list;
+    }
     (s.canStores || []).forEach(function (c) { if (list.indexOf(c) < 0) list.push(c); });
     return list;
   }
@@ -226,6 +232,7 @@ var ShiftLogic = (function () {
   function buildContext(M, y, m) {
     var ctx = { y: y, m: m, M: M, days: [], storeSet: {}, stores: M.stores.map(function (s) { return s.code; }) };
     ctx.stores.forEach(function (c) { ctx.storeSet[c] = true; });
+    ALL_STORES = ctx.stores.slice();
     // 休業日。店舗が空欄なら全店舗、記号があればその店舗だけ
     var hol = {}, storeHol = {}, storeHolMode = {};
     (M.holidays || []).forEach(function (h) {

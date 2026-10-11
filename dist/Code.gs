@@ -351,7 +351,7 @@ function exportPrint(ym, cells, note) {
       // 日曜・祝日の当番日の日中（三番町）は時刻で書く
       var dutyDay = duty[x] && (new Date(x + 'T00:00:00').getDay() === 0 || hol[x]);
       am.push(c.N === '深夜' ? '0-9' : dutyDay && c.AM === '三' ? '8:30' : printable_(c.AM));
-      pm.push(c.N === '準夜' ? '16-24' : dutyDay && c.PM === '三' ? '16:00' : printable_(c.PM));
+      pm.push(c.N === '準夜' ? '16-24' : dutyDay && c.PM === '三' ? '17:30' : printable_(c.PM));
     });
     values.push(am, pm);
   });

@@ -272,4 +272,27 @@ t('夜勤の種類（準夜のみ・深夜のみ）と、日ごとの「夜可�
   const cC = L.generate(Object.assign({}, M, { staff: staff2 }), RC2, 2026, 8);
   assert.strictEqual(cC[J.id]['2026-08-18'].N, '深夜', '夜可で深夜に入る');
 });
+t('日曜の当番日：日中（8:30-17:30）・準夜・翌日の深夜に、それぞれ別の薬剤師が1人ずつ', () => {
+  const d = '2026-08-09', nd = '2026-08-10';
+  const day = M.staff.filter(s => s.job !== '事務' && cells[s.id][d].AM === '三' && cells[s.id][d].PM === '三');
+  const eve = M.staff.filter(s => cells[s.id][d].N === '準夜');
+  const late = M.staff.filter(s => cells[s.id][nd].N === '深夜');
+  assert.strictEqual(day.length, 1, '日中は同じ1人が午前・午後');
+  assert.strictEqual(eve.length, 1); assert.strictEqual(late.length, 1);
+  const ids = new Set([day[0].id, eve[0].id, late[0].id]);
+  assert.strictEqual(ids.size, 3, '3人とも別の人');
+});
+t('固定でない正社員の薬剤師は、応援できる店舗が空欄ならどの店舗にも応援に出られる', () => {
+  // 薬剤師I（松山・常勤・応援先の指定なし）。松山に余裕がある日に一番町が足りなければ移動できる
+  const staff = M.staff.map(s => s.name === '管薬E' ? s : s);
+  const RI = JSON.parse(JSON.stringify(R));
+  const A = M.staff.find(s => s.name === '管薬A');
+  RI[A.id]['2026-08-05'] = { AM: '休', PM: '休', N: '' };       // 一番町の薬剤師がいない日
+  const K = M.staff.find(s => s.name === '薬剤師K');
+  RI[K.id] = RI[K.id] || {}; RI[K.id]['2026-08-05'] = { AM: '出', PM: '出', N: '' }; // 松山に余裕を作る
+  const cI = L.generate(M, RI, 2026, 8);
+  const vI = L.validate(M, RI, cI, 2026, 8);
+  assert.strictEqual(vI.counts['一']['2026-08-05'].AM.pharm.have >= 1, true, '一番町の午前が埋まる');
+  assert.ok(!vI.issues.some(i => /出勤できる店舗に入っていません/.test(i.msg) && M.staff.find(s => s.id === i.id).name === '薬剤師I'));
+});
 console.log(ok + ' passed');
