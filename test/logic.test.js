@@ -232,4 +232,21 @@ t('「一※」「※三」「重信」など※・重信・支回を含む書�
   c7[a.id][d] = { AM: '一 8:30', PM: '', N: '' };
   assert.strictEqual(L.validate(M, R, c7, 2026, 8).counts['一'][d].AM.pharm.have, base + 1, '時刻つきは数える');
 });
+t('午前のみ有給：午後は通常どおり勤務し、有給は0.5日、出勤日として数える', () => {
+  const R2 = JSON.parse(JSON.stringify(R));
+  const I = M.staff.find(s => s.name === '薬剤師I');   // 松山・常勤
+  const d = '2026-08-18';
+  R2[I.id] = R2[I.id] || {};
+  R2[I.id][d] = { AM: '有給', PM: '', N: '' };
+  const c2 = L.generate(M, R2, 2026, 8);
+  const v2 = L.validate(M, R2, c2, 2026, 8);
+  assert.strictEqual(c2[I.id][d].AM, '有給');
+  assert.strictEqual(c2[I.id][d].PM, '松', '午後は勤務');
+  assert.strictEqual(v2.summary[I.id].leave, 0.5);
+  assert.ok(!v2.issues.some(i => i.id === I.id && /公休|連勤/.test(i.msg)), JSON.stringify(v2.issues.filter(i => i.id === I.id)));
+  // その週の公休（日曜＋定休）は別に2日ある
+  const wk = ['2026-08-16', '2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21', '2026-08-22'];
+  const rest = wk.filter(x => { const c = c2[I.id][x]; return !c.N && !['松', '有給'].includes(c.AM) && !['松'].includes(c.PM) && c.AM !== '有給'; }).length;
+  assert.ok(rest >= 2, 'rest=' + rest);
+});
 console.log(ok + ' passed');

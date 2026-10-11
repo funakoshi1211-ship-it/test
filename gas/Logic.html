@@ -399,8 +399,10 @@ var ShiftLogic = (function () {
       var c = peek(cells, s.id, date);
       if (isWorkingCell(ctx, c)) return false;
       if (!homeOpenSlots(s, date).length) return true;
+      if (ngDay(s, date)) return true;
+      // 開いている時間帯がすべて休みの記号なら休みの日。片方だけ（午前のみ有給など）は半日勤務の日
       // 「入」（深夜勤の前日の午後）は休みではない。午前は勤務する
-      return SLOTS.some(function (k) { return OFF.indexOf(c[k]) >= 0 && c[k] !== '入'; }) || ngDay(s, date);
+      return homeOpenSlots(s, date).every(function (k) { return OFF.indexOf(c[k]) >= 0 && c[k] !== '入'; });
     }
     regulars.forEach(function (s) {
       ctx.days.forEach(function (x) {
@@ -838,7 +840,11 @@ var ShiftLogic = (function () {
       });
       ctx.days.forEach(function (x) {
         var c = peek(cells, s.id, x.date);
-        if (isWorkingCell(ctx, c)) return;
+        if (isWorkingCell(ctx, c)) {
+          // 午前のみ・午後のみの有給／特休は 0.5 日
+          if (c) leave += SLOTS.filter(function (k) { return LEAVE.indexOf(c[k]) >= 0; }).length * 0.5;
+          return;
+        }
         if (isLeaveDay(ctx, c)) leave++; else off++;
       });
       var ps = periods.map(function (p) { return { name: p.name, off: periodOff(ctx, cells, s, p), target: +p.targetOff }; });
