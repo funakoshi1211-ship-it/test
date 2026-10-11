@@ -331,4 +331,16 @@ t('パートは基本は午前。午後は正社員でも足りない枠だけ',
   }));
   assert.ok(am >= pm, 'パートの勤務は午前の方が多い am=' + am + ' pm=' + pm);
 });
+t('曜日区分は「水曜」「水曜日」と書いても「水」として読む', () => {
+  const MW = Object.assign({}, M, { requirements: M.requirements.concat([
+    { store: '山', dayType: '水曜', slot: 'PM', pharm: 1, clerk: 1 },
+    { store: '山', dayType: '木曜日', slot: 'PM', pharm: 1, clerk: 1 },
+    { store: '山', dayType: '平日', slot: 'PM', pharm: 2, clerk: 1 }].concat([])) });
+  // 平日の行を2人にしておき、水・木だけ1人になることを確かめる
+  MW.requirements = MW.requirements.filter(r => !(r.store === '山' && r.dayType === '平日' && r.slot === 'PM' && r.pharm === 1));
+  const vW = L.validate(MW, R, cells, 2026, 8);
+  assert.strictEqual(vW.counts['山']['2026-08-05'].PM.pharm.min, 1, '水曜');
+  assert.strictEqual(vW.counts['山']['2026-08-06'].PM.pharm.min, 1, '木曜日');
+  assert.strictEqual(vW.counts['山']['2026-08-04'].PM.pharm.min, 2, '火曜は平日の2人');
+});
 console.log(ok + ' passed');

@@ -134,10 +134,19 @@ var ShiftLogic = (function () {
     return (ctx.M.specialPeriods || []).filter(function (p) { return +p.targetOff > 0 && p.start <= last && p.end >= first; });
   }
 
+  // 曜日区分の書き方をそろえる：「水曜」「水曜日」→「水」、「土曜日」→「土曜」、「日曜」「祝日」→「日祝」
+  function normDayType(t) {
+    t = String(t || '').trim();
+    var m = /^([月火水木金])曜?日?$/.exec(t);
+    if (m) return m[1];
+    if (t === '土曜日' || t === '土曜') return '土曜';
+    if (t === '日曜' || t === '日曜日' || t === '祝日' || t === '日・祝' || t === '日祝日') return '日祝';
+    return t;
+  }
   function findReq(rows, store, dayType, slot) {
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
-      if (r.store === store && r.dayType === dayType && r.slot === slot) return r;
+      if (r.store === store && normDayType(r.dayType) === dayType && r.slot === slot) return r;
     }
     return null;
   }

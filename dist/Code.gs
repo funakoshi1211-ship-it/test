@@ -144,7 +144,7 @@ function setValidation_() {
   list(SHEETS.staff.name, 8, ['○', '準夜のみ', '深夜のみ']);
   list(SHEETS.staff.name, 17, ['午前のみ', '午後のみ']);
   list(SHEETS.reqs.name, 1, stores);
-  list(SHEETS.reqs.name, 2, ['平日', '土曜', '日祝', '当番', '月', '火', '水', '木', '金', '土']);
+  list(SHEETS.reqs.name, 2, ['平日', '土曜', '日祝', '当番', '月', '火', '水', '木', '金', '土', '月曜', '火曜', '水曜', '木曜', '金曜']);
   list(SHEETS.reqs.name, 3, ['午前', '午後']);
   list(SHEETS.holidays.name, 3, stores);
   list(SHEETS.holidays.name, 4, ['有給', '公休']);
