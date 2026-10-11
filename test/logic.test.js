@@ -195,4 +195,20 @@ t('日曜の半日営業（臨時営業・午前）：必要な人数だけ入�
   regs.forEach(s => assert.ok(wk.some(x => c7[s.id][x].AM === '代休'), s.name + ' に代休'));
   assert.ok(!v7.issues.some(i => i.level === 'error' && /連勤|公休/.test(i.msg)), JSON.stringify(v7.issues.filter(i => /連勤|公休/.test(i.msg))));
 });
+t('店舗だけの休業日：その店舗でしか働けない正社員は有給、応援できる人は他の店舗へ。公休は週2日のまま', () => {
+  const M8 = Object.assign({}, M, { holidays: M.holidays.concat([{ date: '2026-08-19', name: '地方祭', store: '中' }]) });
+  const c8 = L.generate(M8, R, 2026, 8);
+  const v8 = L.validate(M8, R, c8, 2026, 8);
+  const d = '2026-08-19';
+  const C = M.staff.find(s => s.name === '管薬C');      // 中一万に固定
+  const F = M.staff.find(s => s.name === '薬剤師F');    // 中一万所属・山越と一番町に応援可
+  assert.strictEqual(c8[C.id][d].AM, '有給');
+  assert.ok(['山', '一'].includes(c8[F.id][d].AM) || ['山', '一'].includes(c8[F.id][d].PM), '応援に出る：' + JSON.stringify(c8[F.id][d]));
+  assert.ok(!v8.issues.some(i => i.id === C.id && /公休/.test(i.msg)), '公休は足りている');
+  assert.ok(!v8.issues.some(i => /代休/.test(i.msg) && i.id === F.id), '平日の店舗休業は代休の対象外');
+  // 「公休」扱いにした日は、これまでどおり公休
+  const M9 = Object.assign({}, M, { holidays: M.holidays.concat([{ date: d, name: '地方祭', store: '中', mode: '公休' }]) });
+  const c9 = L.generate(M9, R, 2026, 8);
+  assert.notStrictEqual(c9[C.id][d].AM, '有給');
+});
 console.log(ok + ' passed');

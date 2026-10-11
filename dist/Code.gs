@@ -17,7 +17,7 @@ var SHEETS = {
       '応援できる店舗（記号を並べる）', '夜勤可（○）', '出勤できない曜日（例：水土）', '週の出勤上限（非常勤）',
       '週の店舗出勤上限', '週の在宅日数', '平日の終業時刻', '土曜の終業時刻', '表示順', '休みにしたい曜日（できれば）', '勤務できる時間帯（午前のみ/午後のみ）']
   },
-  holidays: { name: '祝日・休業日', header: ['日付', '名称', '店舗記号（空欄＝全店舗）'] },
+  holidays: { name: '祝日・休業日', header: ['日付', '名称', '店舗記号（空欄＝全店舗）', '店舗休業日の扱い（空欄＝有給／公休）'] },
   extra: { name: '臨時営業', header: ['日付', '店舗記号', '時間帯（午前/午後/終日）', 'メモ'] },
   duty: { name: '夜間当番日', header: ['日付'] },
   periods: { name: '特別期間', header: ['名称', '開始日', '終了日', '正社員の公休数（そろえる日数）', '公休が多い人の扱い（有給/応援/なし）'] },
@@ -147,6 +147,7 @@ function setValidation_() {
   list(SHEETS.reqs.name, 2, ['平日', '土曜', '日祝', '当番']);
   list(SHEETS.reqs.name, 3, ['午前', '午後']);
   list(SHEETS.holidays.name, 3, stores);
+  list(SHEETS.holidays.name, 4, ['有給', '公休']);
   list(SHEETS.extra.name, 2, stores);
   list(SHEETS.extra.name, 3, ['午前', '午後', '終日']);
   list(SHEETS.periods.name, 5, ['有給', '応援', 'なし']);
@@ -199,7 +200,7 @@ function getData(ym) {
         slotOnly: str_(r[16]) === '午前のみ' ? 'AM' : str_(r[16]) === '午後のみ' ? 'PM' : ''
       };
     }).filter(function (s) { return s.id && s.name; }),
-    holidays: rows_('holidays').map(function (r) { return { date: date_(r[0]), name: str_(r[1]), store: str_(r[2]) }; }),
+    holidays: rows_('holidays').map(function (r) { return { date: date_(r[0]), name: str_(r[1]), store: str_(r[2]), mode: str_(r[3]) }; }),
     extraOpen: rows_('extra').map(function (r) { return { date: date_(r[0]), store: str_(r[1]), slot: slot_(r[2]) }; }),
     dutyDates: rows_('duty').map(function (r) { return date_(r[0]); }),
     specialPeriods: rows_('periods').map(function (r) {
