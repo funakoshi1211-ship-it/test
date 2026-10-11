@@ -53,7 +53,7 @@ t('手で違反を作ると判定で検出できる', () => {
   c2[nightless.id]['2026-08-17'].N = '準夜';
   const v2 = L.validate(M, R, c2, 2026, 8);
   assert.ok(v2.issues.some(i => i.msg.includes('固定配置')));
-  assert.ok(v2.issues.some(i => i.msg.includes('夜勤できない')));
+  assert.ok(v2.issues.some(i => i.msg.includes('勤に入れない人')));
 });
 t('深夜勤の前日は午前だけ（午後は「入」）', () => {
   for (const d of M.dutyDates) {
@@ -248,5 +248,28 @@ t('午前のみ有給：午後は通常どおり勤務し、有給は0.5日、�
   const wk = ['2026-08-16', '2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21', '2026-08-22'];
   const rest = wk.filter(x => { const c = c2[I.id][x]; return !c.N && !['松', '有給'].includes(c.AM) && !['松'].includes(c.PM) && c.AM !== '有給'; }).length;
   assert.ok(rest >= 2, 'rest=' + rest);
+});
+t('夜勤の種類（準夜のみ・深夜のみ）と、日ごとの「夜可」「夜×」', () => {
+  // 管薬B は準夜のみ、薬剤師G は深夜のみ、薬剤師H は8/17に夜×
+  const staff = M.staff.map(s => s.name === '管薬B' ? Object.assign({}, s, { nightType: 'eve' }) : s.name === '薬剤師G' ? Object.assign({}, s, { nightType: 'late' }) : s);
+  const MB = Object.assign({}, M, { staff });
+  const RB = JSON.parse(JSON.stringify(R));
+  const H = staff.find(s => s.name === '薬剤師H');
+  RB[H.id] = RB[H.id] || {}; RB[H.id]['2026-08-17'] = { AM: '', PM: '', N: '夜×' };
+  const cB = L.generate(MB, RB, 2026, 8);
+  const vB = L.validate(MB, RB, cB, 2026, 8);
+  const B = staff.find(s => s.name === '管薬B'), G = staff.find(s => s.name === '薬剤師G');
+  Object.keys(cB[B.id]).forEach(d => assert.notStrictEqual(cB[B.id][d].N, '深夜', 'Bは深夜に入らない ' + d));
+  Object.keys(cB[G.id]).forEach(d => assert.notStrictEqual(cB[G.id][d].N, '準夜', 'Gは準夜に入らない ' + d));
+  assert.strictEqual(cB[H.id]['2026-08-17'].N, '', 'Hは8/17に夜勤なし');
+  assert.ok(!vB.issues.some(i => /勤に入れない人|夜×/.test(i.msg)));
+  // 日中は休み（休）だが、夜可なら深夜に入れる
+  const RC = JSON.parse(JSON.stringify(R));
+  const J = M.staff.find(s => s.name === '薬剤師H');
+  RC[J.id] = RC[J.id] || {}; RC[J.id]['2026-08-18'] = { AM: '休', PM: '休', N: '夜可' };
+  const staff2 = M.staff.map(s => s.name === '夜勤P' ? Object.assign({}, s, { nightType: '' , night: false }) : s.name === '薬剤師G' ? Object.assign({}, s, { nightType: '', night: false }) : s.name === '管薬B' ? Object.assign({}, s, { nightType: 'eve' }) : s);
+  const RC2 = JSON.parse(JSON.stringify(RC)); delete RC2['S16'];
+  const cC = L.generate(Object.assign({}, M, { staff: staff2 }), RC2, 2026, 8);
+  assert.strictEqual(cC[J.id]['2026-08-18'].N, '深夜', '夜可で深夜に入る');
 });
 console.log(ok + ' passed');

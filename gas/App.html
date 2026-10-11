@@ -101,7 +101,7 @@
   // ---------- 入力 ----------
   function paletteCodes() {
     var stores = S.master ? S.master.stores.map(function (s) { return s.code; }) : [];
-    var codes = [{ g: '店舗', list: stores }, { g: '店舗外', list: AWAY }, { g: '休み', list: ['定休', '休', '代休', '有給', '特休', '×'] }, { g: '夜勤', list: ['準夜', '深夜'] }];
+    var codes = [{ g: '店舗', list: stores }, { g: '店舗外', list: AWAY }, { g: '休み', list: ['定休', '休', '代休', '有給', '特休', '×'] }, { g: '夜勤', list: S.mode === 'req' ? ['準夜', '深夜', L.NIGHT_OK, L.NIGHT_NG] : ['準夜', '深夜'] }];
     if (S.mode === 'req') codes.splice(1, 0, { g: '希望', list: ['出'] });
     return codes;
   }
@@ -160,7 +160,7 @@
       if (row === 'N') c.N = '';
       else if (S.both) { c.AM = ''; c.PM = ''; }
       else c[row] = '';
-    } else if (L.NIGHT.indexOf(code) >= 0) {
+    } else if (L.NIGHT.indexOf(code) >= 0 || code === L.NIGHT_OK || code === L.NIGHT_NG) {
       c.N = c.N === code ? '' : code;
     } else if (row === 'N') {
       toast('夜の行には「準夜」「深夜」だけを入れられます'); return;
@@ -282,7 +282,7 @@
           if (S.mode === 'shift' && bad[s.id + '|' + x.date]) classes.push('bad');
           if (S.hlDate === x.date && (!S.hlId || S.hlId === s.id)) classes.push('hl');
           var html;
-          if (row === 'N') html = v === '準夜' ? '準' : v === '深夜' ? '深' : '';
+          if (row === 'N') html = v === '準夜' ? '準' : v === '深夜' ? '深' : v === L.NIGHT_OK ? '可' : v === L.NIGHT_NG ? '×' : '';
           else {
             html = esc(v);
             var isSat = x.dow === 6, isStoreV = S.master.stores.some(function (t) { return t.code === v; });
@@ -332,6 +332,7 @@
       '茶色の枠：希望入力で決まっている枠（自動作成で変わらない）<br>' +
       '赤い枠：その日にルール違反がある<br>' +
       '日付が黒：夜間当番日　黄色の日付：特別期間<br>' +
+      '<b>夜の行（希望入力）</b>　夜可：日中は休みでもその日は夜勤できる　夜×：その日は夜勤できない<br>' +
       '<b>記号</b>　※・重信・支回：出勤扱いで店舗にいない（人数に数えない）　代休：日曜・祝日に出勤した分の休み（公休）　在宅：在宅勤務　夜：準夜勤の日の日中（勤務なし・人数に数えない）　入：深夜勤の前日の午後（勤務なし）　明：深夜勤明け　出：出勤希望（非常勤）<br>' +
       '<b>休み</b>　定休・休は週2日の公休。有給・特休（お盆など）は公休とは別に取る<br>' +
       '<b>社員の設定</b>　氏名を押すと、週の出勤上限などを変更できます<br>' +
@@ -363,7 +364,7 @@
     f.home.innerHTML = stores.map(function (t) { return '<option value="' + esc(t.code) + '">' + esc(t.name) + '</option>'; }).join('');
     f.home.value = s.home;
     f.fixed.checked = !!s.fixed;
-    f.night.checked = !!s.night;
+    f.night.value = s.nightType || (s.night ? 'both' : '');
     $('sfCan').innerHTML = stores.map(function (t) {
       return '<label><input type="checkbox" name="can" value="' + esc(t.code) + '"' + ((s.canStores || []).indexOf(t.code) >= 0 ? ' checked' : '') + '>' + esc(t.name) + '</label>';
     }).join('');
@@ -387,7 +388,7 @@
     s.kind = f.kind.value;
     s.home = f.home.value;
     s.fixed = f.fixed.checked;
-    s.night = f.night.checked;
+    s.nightType = f.night.value; s.night = !!s.nightType;
     s.canStores = Array.prototype.map.call(f.querySelectorAll('input[name=can]:checked'), function (i) { return i.value; })
       .filter(function (c) { return c !== s.home; });
     s.ngWeekdays = Array.prototype.map.call(f.querySelectorAll('input[name=ng]:checked'), function (i) { return +i.value; });

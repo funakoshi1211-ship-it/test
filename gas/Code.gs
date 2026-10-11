@@ -14,7 +14,7 @@ var SHEETS = {
   staff: {
     name: '社員',
     header: ['ID', '氏名', '職種（管薬/薬/事務）', '区分（常勤/準常勤/非常勤/外部）', '所属店舗（記号）', '固定（○）',
-      '応援できる店舗（記号を並べる）', '夜勤可（○）', '出勤できない曜日（例：水土）', '週の出勤上限（非常勤）',
+      '応援できる店舗（記号を並べる）', '夜勤可（○＝両方／準夜のみ／深夜のみ）', '出勤できない曜日（例：水土）', '週の出勤上限（非常勤）',
       '週の店舗出勤上限', '週の在宅日数', '平日の終業時刻', '土曜の終業時刻', '表示順', '休みにしたい曜日（できれば）', '勤務できる時間帯（午前のみ/午後のみ）']
   },
   holidays: { name: '祝日・休業日', header: ['日付', '名称', '店舗記号（空欄＝全店舗）', '店舗休業日の扱い（空欄＝有給／公休）'] },
@@ -141,7 +141,7 @@ function setValidation_() {
   list(SHEETS.staff.name, 4, ['常勤', '準常勤', '非常勤', '外部']);
   list(SHEETS.staff.name, 5, stores);
   list(SHEETS.staff.name, 6, ['○']);
-  list(SHEETS.staff.name, 8, ['○']);
+  list(SHEETS.staff.name, 8, ['○', '準夜のみ', '深夜のみ']);
   list(SHEETS.staff.name, 17, ['午前のみ', '午後のみ']);
   list(SHEETS.reqs.name, 1, stores);
   list(SHEETS.reqs.name, 2, ['平日', '土曜', '日祝', '当番', '月', '火', '水', '木', '金', '土']);
@@ -179,6 +179,8 @@ function ym_(v) {
 function slot_(v) { v = str_(v); return v === '午前' ? 'AM' : v === '午後' ? 'PM' : v === '終日' || v === '' ? 'ALL' : v; }
 function yes_(v) { v = str_(v); return v === '○' || v === '〇' || v === 'o' || v === 'O' || v === 'TRUE' || v === 'true' || v === '1'; }
 function chars_(v) { return str_(v).replace(/[\s,、・]/g, '').split('').filter(Boolean); }
+// 夜勤可の列：○＝両方、準夜のみ、深夜のみ
+function nightType_(v) { v = str_(v); return v === '準夜のみ' || v === '準夜' ? 'eve' : v === '深夜のみ' || v === '深夜' ? 'late' : yes_(v) || v === '両方' ? 'both' : ''; }
 function num_(v) { var n = Number(v); return v === '' || isNaN(n) ? null : n; }
 
 var WEEKDAYS = '日月火水木金土';
@@ -192,7 +194,7 @@ function getData(ym) {
     staff: rows_('staff').map(function (r, i) {
       return {
         id: str_(r[0]) || str_(r[1]), name: str_(r[1]), job: str_(r[2]), kind: str_(r[3]), home: str_(r[4]), fixed: yes_(r[5]),
-        canStores: chars_(r[6]), night: yes_(r[7]),
+        canStores: chars_(r[6]), night: nightType_(r[7]) !== '', nightType: nightType_(r[7]),
         ngWeekdays: chars_(r[8]).map(function (c) { return WEEKDAYS.indexOf(c); }).filter(function (n) { return n >= 0; }),
         weeklyMax: num_(r[9]), weeklyStoreMax: num_(r[10]), weeklyRemote: num_(r[11]) || 0,
         endWeekday: str_(r[12]), endSat: str_(r[13]), order: num_(r[14]) || (i + 1),
@@ -297,7 +299,7 @@ function saveStaff(s) {
   for (var i = 0; i < keys.length; i++) {
     if ((str_(keys[i][0]) || str_(keys[i][1])) !== s.id) continue;
     var row = [
-      s.kind, s.home, s.fixed ? '○' : '', (s.canStores || []).join(''), s.night ? '○' : '',
+      s.kind, s.home, s.fixed ? '○' : '', (s.canStores || []).join(''), s.nightType === 'eve' ? '準夜のみ' : s.nightType === 'late' ? '深夜のみ' : s.nightType === 'both' || s.night ? '○' : '',
       (s.ngWeekdays || []).map(function (n) { return WEEKDAYS.charAt(n); }).join(''),
       s.weeklyMax == null ? '' : s.weeklyMax, s.weeklyStoreMax == null ? '' : s.weeklyStoreMax, s.weeklyRemote || ''
     ];

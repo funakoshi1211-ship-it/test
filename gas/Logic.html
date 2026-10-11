@@ -14,6 +14,13 @@ var ShiftLogic = (function () {
   var LEAVE = ['有給', '特休']; // 公休（週2日）とは別に取る休み
   var AWAY = ['※', '重信', '支回', '在宅'];
   var NIGHT = ['準夜', '深夜'];
+  // 夜の行に入れる希望：その日は夜勤できる（日中は休みでも）／その日は夜勤できない
+  var NIGHT_OK = '夜可', NIGHT_NG = '夜×';
+  // 社員ごとの夜勤の種類：両方／準夜のみ／深夜のみ
+  function nightOK(s, kind) {
+    var t = s.nightType || (s.night ? 'both' : '');
+    return t === 'both' || t === kind;
+  }
   var WANT = '出';
   var SLOTS = ['AM', 'PM'];
   var DUTY_STORE = '三';
@@ -224,7 +231,7 @@ var ShiftLogic = (function () {
       stats[s.id] = { night: 0, dutyDay: 0, moves: 0 };
       ctx.days.forEach(function (x) {
         var r = peek(R, s.id, x.date), c = cellOf(cells, s.id, x.date);
-        if (r) { c.AM = r.AM || ''; c.PM = r.PM || ''; c.N = r.N || ''; }
+        if (r) { c.AM = r.AM || ''; c.PM = r.PM || ''; c.N = NIGHT.indexOf(r.N) >= 0 ? r.N : ''; }
         if (c.AM === WANT) c.AM = '';
         if (c.PM === WANT) c.PM = '';
       });
@@ -240,22 +247,25 @@ var ShiftLogic = (function () {
     ctx.days.forEach(function (x) {
       if (!x.duty) return;
       var nextDate = addDays(x.date, 1);
-      var eligible = ctx.staff.filter(function (s) { return s.night && roleOf(s) === 'pharm'; });
+      var eligible = ctx.staff.filter(function (s) { return (nightOK(s, 'eve') || nightOK(s, 'late')) && roleOf(s) === 'pharm'; });
 
       function canNight(s, date) {
         var c = peek(cells, s.id, date);
         if (!c) return false;
         if (c.N) return false;
         if (ngDay(s, date)) return false;
-        if (SLOTS.some(function (k) { return offRequested(s.id, date, k); })) return false;
-        if (isExternal(s) && !wantsWork(s.id, date)) return false;
+        var nreq = reqVal(R, s.id, date, 'N');
+        if (nreq === NIGHT_NG) return false;
+        // 日中に休みの希望があっても、夜の行に「夜可」があれば夜勤に入れる
+        if (nreq !== NIGHT_OK && SLOTS.some(function (k) { return offRequested(s.id, date, k); })) return false;
+        if (isExternal(s) && !wantsWork(s.id, date) && nreq !== NIGHT_OK) return false;
         return true;
       }
       // 準夜 16-24
       var hasEve = ctx.staff.some(function (s) { var c = peek(cells, s.id, x.date); return c && c.N === '準夜'; });
       if (!hasEve) {
         var cand = eligible.filter(function (s) {
-          if (!canNight(s, x.date)) return false;
+          if (!nightOK(s, 'eve') || !canNight(s, x.date)) return false;
           // 準夜勤の日は日中に勤務しないので、日中の予定が決まっている人は外す
           if (SLOTS.some(function (k) { var v = reqVal(R, s.id, x.date, k); return v && OFF.indexOf(v) < 0; })) return false;
           var prev = peek(cells, s.id, addDays(x.date, -1));
@@ -268,8 +278,9 @@ var ShiftLogic = (function () {
         var hasLate = ctx.staff.some(function (s) { var c = peek(cells, s.id, nextDate); return c && c.N === '深夜'; });
         if (!hasLate) {
           var cand2 = eligible.filter(function (s) {
-            if (!canNight(s, nextDate)) return false;
-            if (SLOTS.some(function (k) { return locked(s.id, nextDate, k) && reqVal(R, s.id, nextDate, k) !== WANT; })) return false;
+            if (!nightOK(s, 'late') || !canNight(s, nextDate)) return false;
+            var okDay = reqVal(R, s.id, nextDate, 'N') === NIGHT_OK;
+            if (SLOTS.some(function (k) { var v = reqVal(R, s.id, nextDate, k); return v && v !== WANT && !(okDay && OFF.indexOf(v) >= 0); })) return false;
             var today = peek(cells, s.id, x.date);
             if (today && today.N === '準夜') return false;
             // 前日（当番日）は午前 9-13 だけ勤務できる。午後に予定が決まっている人は外す
@@ -793,10 +804,11 @@ var ShiftLogic = (function () {
           if (rv === WANT && !isStore(ctx, v)) add('warn', s.name + '：出勤希望の日に入っていません', s.id, x.date);
         });
         var rn = reqVal(R, s.id, x.date, 'N');
-        if (rn && rn !== c.N) add('warn', s.name + '：希望（' + rn + '）と違います', s.id, x.date);
+        if (rn === NIGHT_NG && c.N) add('error', s.name + '：夜勤できない日（夜×）に夜勤が入っています', s.id, x.date);
+        else if (rn && rn !== NIGHT_OK && rn !== NIGHT_NG && rn !== c.N) add('warn', s.name + '：希望（' + rn + '）と違います', s.id, x.date);
         if (working && (s.ngWeekdays || []).indexOf(x.dow) >= 0) add('error', s.name + '：出勤できない曜日です', s.id, x.date);
         if (c.N) {
-          if (!s.night) add('error', s.name + '：夜勤できない人に夜勤が入っています', s.id, x.date);
+          if (!nightOK(s, c.N === '準夜' ? 'eve' : 'late')) add('error', s.name + '：' + c.N + '勤に入れない人です', s.id, x.date);
           if (c.N === '準夜') {
             var nx = peek(cells, s.id, addDays(x.date, 1));
             if (nx && nx.N === '深夜') add('error', s.name + '：準夜勤から続けて深夜勤です', s.id, x.date);
@@ -872,7 +884,7 @@ var ShiftLogic = (function () {
   }
 
   return {
-    OFF: OFF, LEAVE: LEAVE, AWAY: AWAY, NIGHT: NIGHT, WANT: WANT, SLOTS: SLOTS, DUTY_STORE: DUTY_STORE,
+    OFF: OFF, LEAVE: LEAVE, NIGHT_OK: NIGHT_OK, NIGHT_NG: NIGHT_NG, nightOK: nightOK, AWAY: AWAY, NIGHT: NIGHT, WANT: WANT, SLOTS: SLOTS, DUTY_STORE: DUTY_STORE,
     buildContext: buildContext, openKind: openKind, required: required,
     generate: generate, validate: validate, addDays: addDays, dow: dow, ds: ds, daysInMonth: daysInMonth
   };
