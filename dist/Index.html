@@ -621,7 +621,8 @@ var ShiftLogic = (function () {
       });
       SLOTS.forEach(function (k) { if (!locked(s.id, date, k) && openKind(ctx, s.home, date, k)) c[k] = code; });
     }
-    ctx.weeks.forEach(function (wk) {
+    var remoteWd = {};
+    ctx.weeks.forEach(function (wk, wkIndex) {
       // 休みを取りにくい（固定配置の）人から決める
       var order = regulars.slice().sort(function (a, b) { return (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0); });
       order.forEach(function (s) {
@@ -664,8 +665,17 @@ var ShiftLogic = (function () {
               return !dayLocked(s.id, x.date) && !c.N && !isStoreDay(ctx, c) && SLOTS.every(function (k) { return c[k] !== '在宅'; });
             });
             if (!c2.length) break;
-            c2.sort(function (a, b) { return slackIfOff(s, b.date) - slackIfOff(s, a.date); });
+            // 人に余裕のある日を優先。同じなら、その月にまだ在宅にしていない曜日へ回す（月曜ばかりにならないように）
+            var used = remoteWd[s.id] = remoteWd[s.id] || {};
+            c2.sort(function (a, b) {
+              var d = slackIfOff(s, b.date) - slackIfOff(s, a.date);
+              if (d) return d;
+              var wa = dow(a.date), wb = dow(b.date);
+              if ((used[wa] || 0) !== (used[wb] || 0)) return (used[wa] || 0) - (used[wb] || 0);
+              return (wa - wkIndex + 7) % 7 - (wb - wkIndex + 7) % 7;
+            });
             takeOff(s, c2[0].date, '在宅');
+            used[dow(c2[0].date)] = (used[dow(c2[0].date)] || 0) + 1;
           }
         }
       });

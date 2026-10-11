@@ -343,4 +343,12 @@ t('曜日区分は「水曜」「水曜日」と書いても「水」として�
   assert.strictEqual(vW.counts['山']['2026-08-06'].PM.pharm.min, 1, '木曜日');
   assert.strictEqual(vW.counts['山']['2026-08-04'].PM.pharm.min, 2, '火曜は平日の2人');
 });
+t('在宅（週1）は同じ曜日に固定せず回す', () => {
+  const MR = Object.assign({}, M, { specialPeriods: [] });
+  const c = L.generate(MR, {}, 2026, 10);
+  const wds = Object.keys(c.S23).filter(d => c.S23[d].AM === '在宅' || c.S23[d].PM === '在宅')
+    .map(d => new Date(d + 'T00:00:00Z').getUTCDay());
+  assert.ok(wds.length >= 3, '在宅は週1回 n=' + wds.length);
+  assert.ok(new Set(wds).size >= 3, '曜日がばらける ' + wds.join(','));
+});
 console.log(ok + ' passed');
