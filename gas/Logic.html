@@ -556,6 +556,8 @@ var ShiftLogic = (function () {
         var any = false;
         SLOTS.forEach(function (k) {
           if (s.slotOnly && s.slotOnly !== k) return;
+          // 出勤希望が午前・午後とも入っている日は、まず午前だけ入れる（午後は足りないときに入る）
+          if (k === 'PM' && reqVal(R, s.id, x.date, 'AM') === WANT && openKind(ctx, s.home, x.date, 'AM')) return;
           if (reqVal(R, s.id, x.date, k) === WANT && s.home && openKind(ctx, s.home, x.date, k)) { c[k] = s.home; any = true; }
         });
         if (any) addPw(s, wk);
@@ -686,10 +688,12 @@ var ShiftLogic = (function () {
       });
     });
 
-    // 7. 非常勤で不足を埋める
+    // 7. 非常勤で不足を埋める。パートは基本は午前：先に1か月分の午前を埋め、
+    //    午後は正社員の応援でも足りない枠だけに入れる
+    function fillParts(slots) {
     ctx.days.forEach(function (x) {
       var wk = weekOf(ctx, x.date);
-      SLOTS.forEach(function (k) {
+      slots.forEach(function (k) {
         ['pharm', 'clerk'].forEach(function (role) {
           ctx.stores.forEach(function (target) {
             var r = required(ctx, target, x.date, k, role);
@@ -725,6 +729,10 @@ var ShiftLogic = (function () {
         });
       });
     });
+    }
+    fillParts(['AM']);
+    balance();
+    fillParts(['PM']);
     balance();
 
     // 8. 最低人数を超えている枠から、自動で入れた非常勤を外す（必要最低人数で配置する）
@@ -829,7 +837,7 @@ var ShiftLogic = (function () {
           }
           var rv = reqVal(R, s.id, x.date, k);
           if (rv && rv !== WANT && rv !== raw) add('warn', s.name + '：希望（' + rv + '）と違います', s.id, x.date);
-          if (rv === WANT && !isStore(ctx, v)) add('warn', s.name + '：出勤希望の日に入っていません', s.id, x.date);
+          if (rv === WANT && !isStoreDay(ctx, c)) add('warn', s.name + '：出勤希望の日に入っていません', s.id, x.date);
         });
         var rn = reqVal(R, s.id, x.date, 'N');
         if (rn === NIGHT_NG && c.N) add('error', s.name + '：夜勤できない日（夜×）に夜勤が入っています', s.id, x.date);

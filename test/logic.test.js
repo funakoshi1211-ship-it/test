@@ -315,4 +315,20 @@ t('曜日別の必要人数で山越の木曜午後を1人にすると、木曜�
     if (c) assert.ok(c.have <= Math.max(1, M.staff.filter(s => s.kind !== '非常勤' && cY[s.id][d].PM === '山').length), d + ' have=' + c.have);
   });
 });
+t('パートは基本は午前。午後は正社員でも足りない枠だけ', () => {
+  const parts = M.staff.filter(s => s.kind === '非常勤');
+  let am = 0, pm = 0;
+  parts.forEach(s => Object.keys(cells[s.id]).forEach(d => {
+    if (stores.includes(cells[s.id][d].AM)) am++;
+    if (stores.includes(cells[s.id][d].PM)) {
+      pm++;
+      // 午後に入っているなら、その枠はパートを除くと最低人数に届かない
+      const st = cells[s.id][d].PM, role = s.job === '事務' ? 'clerk' : 'pharm';
+      const c = v.counts[st][d].PM[role];
+      const req = R[s.id] && R[s.id][d] && R[s.id][d].PM;
+      if (!req) assert.ok(c.have <= c.min, s.name + ' ' + d + ' 午後は不足を埋めるときだけ');
+    }
+  }));
+  assert.ok(am >= pm, 'パートの勤務は午前の方が多い am=' + am + ' pm=' + pm);
+});
 console.log(ok + ' passed');
