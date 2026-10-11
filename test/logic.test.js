@@ -295,4 +295,24 @@ t('固定でない正社員の薬剤師は、応援できる店舗が空欄な�
   assert.strictEqual(vI.counts['一']['2026-08-05'].AM.pharm.have >= 1, true, '一番町の午前が埋まる');
   assert.ok(!vI.issues.some(i => /出勤できる店舗に入っていません/.test(i.msg) && M.staff.find(s => s.id === i.id).name === '薬剤師I'));
 });
+t('自動で入れた非常勤は、最低人数を超える枠には残らない', () => {
+  const parts = M.staff.filter(s => s.kind === '非常勤');
+  Object.keys(cells[parts[0].id]).forEach(d => ['AM', 'PM'].forEach(k => ['pharm', 'clerk'].forEach(role => {
+    stores.forEach(st => {
+      const c = v.counts[st][d][k][role];
+      if (!c || c.have <= c.min) return;
+      const autoPart = parts.filter(s => (role === 'clerk') === (s.job === '事務') && cells[s.id][d][k] === st && !(R[s.id] && R[s.id][d] && R[s.id][d][k]));
+      assert.strictEqual(autoPart.length, 0, st + ' ' + d + ' ' + k + ' ' + role + ' に余分な非常勤 ' + autoPart.map(s => s.name));
+    });
+  })));
+});
+t('曜日別の必要人数で山越の木曜午後を1人にすると、木曜午後に余分な非常勤が入らない', () => {
+  const MY = Object.assign({}, M, { requirements: M.requirements.concat([{ store: '山', dayType: '木', slot: 'PM', pharm: 1, clerk: 1 }]) });
+  const cY = L.generate(MY, R, 2026, 8);
+  const vY = L.validate(MY, R, cY, 2026, 8);
+  ['2026-08-06', '2026-08-13', '2026-08-20', '2026-08-27'].forEach(d => {
+    const c = vY.counts['山'][d].PM.pharm;
+    if (c) assert.ok(c.have <= Math.max(1, M.staff.filter(s => s.kind !== '非常勤' && cY[s.id][d].PM === '山').length), d + ' have=' + c.have);
+  });
+});
 console.log(ok + ' passed');

@@ -727,6 +727,27 @@ var ShiftLogic = (function () {
     });
     balance();
 
+    // 8. 最低人数を超えている枠から、自動で入れた非常勤を外す（必要最低人数で配置する）
+    //    希望入力で決まっている枠（出勤希望を含む）は外さない。午後から先に外す
+    ctx.days.forEach(function (x) {
+      ['PM', 'AM'].forEach(function (k) {
+        ['pharm', 'clerk'].forEach(function (role) {
+          ctx.stores.forEach(function (st) {
+            var r = required(ctx, st, x.date, k, role);
+            if (!r) return;
+            var have = countAt(ctx, cells, st, x.date, k, role);
+            parts_.filter(function (s) {
+              return roleOf(s) === role && peek(cells, s.id, x.date)[k] === st && !reqVal(R, s.id, x.date, k);
+            }).forEach(function (s) {
+              if (have <= r.min) return;
+              peek(cells, s.id, x.date)[k] = '';
+              have--;
+            });
+          });
+        });
+      });
+    });
+
     return cells;
   }
 
