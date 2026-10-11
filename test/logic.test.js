@@ -211,4 +211,25 @@ t('店舗だけの休業日：その店舗でしか働けない正社員は有�
   const c9 = L.generate(M9, R, 2026, 8);
   assert.notStrictEqual(c9[C.id][d].AM, '有給');
 });
+t('曜日別の必要人数（月〜土の行）は平日・土曜の行より優先される', () => {
+  const reqs = M.requirements.concat([{ store: '松', dayType: '水', slot: 'AM', pharm: 3, clerk: 2 }]);
+  const MA = Object.assign({}, M, { requirements: reqs });
+  const vA = L.validate(MA, R, cells, 2026, 8);
+  assert.strictEqual(vA.counts['松']['2026-08-05'].AM.pharm.min, 3, '水曜は3人');
+  assert.strictEqual(vA.counts['松']['2026-08-04'].AM.pharm.min, 2, '火曜は平日の2人のまま');
+  assert.strictEqual(vA.counts['松']['2026-08-05'].PM.pharm.min, 2, '水曜の午後は行がないので平日の2人');
+});
+t('「一※」「※三」「重信」など※・重信・支回を含む書き方は人数に数えない', () => {
+  const c7 = JSON.parse(JSON.stringify(cells));
+  const a = M.staff.find(s => s.name === '管薬A');
+  const d = '2026-08-05';
+  const base = v.counts['一'][d].AM.pharm.have - (cells[a.id][d].AM === '一' ? 1 : 0);
+  ['一※', '※一', '一 重信', '支回'].forEach(val => {
+    c7[a.id][d] = { AM: val, PM: val, N: '' };
+    const v7 = L.validate(M, R, c7, 2026, 8);
+    assert.strictEqual(v7.counts['一'][d].AM.pharm.have, base, val);
+  });
+  c7[a.id][d] = { AM: '一 8:30', PM: '', N: '' };
+  assert.strictEqual(L.validate(M, R, c7, 2026, 8).counts['一'][d].AM.pharm.have, base + 1, '時刻つきは数える');
+});
 console.log(ok + ' passed');

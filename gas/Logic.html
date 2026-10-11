@@ -36,6 +36,8 @@ var ShiftLogic = (function () {
   function storeOf(ctx, v) {
     if (!v) return null;
     if (ctx.storeSet[v]) return v;
+    // ※・重信・支回・在宅を含む書き方（「一※」「※三」など）は、出勤扱いでも店舗の人数に数えない
+    if (AWAY.some(function (a) { return String(v).indexOf(a) >= 0; })) return null;
     var head = String(v).charAt(0);
     return String(v).length > 1 && ctx.storeSet[head] ? head : null;
   }
@@ -138,6 +140,10 @@ var ShiftLogic = (function () {
       soft = true;
       row = findReq((ctx.M.specialReqs || []).filter(function (r) { return r.period === day.special.name; }), store, dayType, slot);
     }
+    // 曜日ごとの行（月〜土）があればそれを優先し、なければ平日／土曜の行
+    var wdName = '日月火水木金土'.charAt(day.dow);
+    if (!row && day.special && kind === 'normal') row = findReq((ctx.M.specialReqs || []).filter(function (r) { return r.period === day.special.name; }), store, wdName, slot);
+    if (!row && kind === 'normal') row = findReq(ctx.M.requirements || [], store, wdName, slot);
     if (!row) row = findReq(ctx.M.requirements || [], store, dayType, slot);
     if (!row && dayType === '日祝') row = findReq(ctx.M.requirements || [], store, '土曜', 'AM');
     if (!row && kind === 'duty') row = { pharm: 1, clerk: 0 };

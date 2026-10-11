@@ -10,7 +10,7 @@ var TZ = 'Asia/Tokyo';
 
 var SHEETS = {
   stores: { name: '店舗', header: ['記号', '店舗名'] },
-  reqs: { name: '必要人数', header: ['店舗記号', '曜日区分（平日/土曜/日祝/当番）', '時間帯（午前/午後）', '薬剤師', '事務'] },
+  reqs: { name: '必要人数', header: ['店舗記号', '曜日区分（平日/土曜/日祝/当番、曜日別は月〜土）', '時間帯（午前/午後）', '薬剤師', '事務'] },
   staff: {
     name: '社員',
     header: ['ID', '氏名', '職種（管薬/薬/事務）', '区分（常勤/準常勤/非常勤/外部）', '所属店舗（記号）', '固定（○）',
@@ -144,7 +144,7 @@ function setValidation_() {
   list(SHEETS.staff.name, 8, ['○']);
   list(SHEETS.staff.name, 17, ['午前のみ', '午後のみ']);
   list(SHEETS.reqs.name, 1, stores);
-  list(SHEETS.reqs.name, 2, ['平日', '土曜', '日祝', '当番']);
+  list(SHEETS.reqs.name, 2, ['平日', '土曜', '日祝', '当番', '月', '火', '水', '木', '金', '土']);
   list(SHEETS.reqs.name, 3, ['午前', '午後']);
   list(SHEETS.holidays.name, 3, stores);
   list(SHEETS.holidays.name, 4, ['有給', '公休']);
