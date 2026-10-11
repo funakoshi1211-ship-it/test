@@ -222,7 +222,8 @@
     for (var e = 0; e < extra; e++) h += '<th class="tally"></th>';
     h += '</tr></thead>';
 
-    // 人数の集計
+    // 人数の集計（希望入力のときは出さない：社員の行をすぐ下に見せるため）
+    if (S.mode !== 'req') {
     h += '<tbody class="sum">';
     var roles = [['pharm', '薬'], ['clerk', '事務']];
     S.master.stores.forEach(function (st) {
@@ -249,6 +250,7 @@
       h += '<td colspan="' + extra + '" class="tally"></td></tr>';
     });
     h += '<tr class="gap"><td colspan="' + (days.length + 2 + extra) + '"></td></tr></tbody>';
+    }
 
     // 社員
     var view = S.mode === 'req' ? S.requests : S.cells;
@@ -287,7 +289,8 @@
             var end = !isStoreV ? '' : (row === 'PM' && !isSat) ? s.endWeekday : (row === 'AM' && isSat) ? s.endSat : '';
             if (end) html += '<small>~' + esc(end) + '</small>';
           }
-          h += '<td class="' + classes.join(' ') + '" data-id="' + esc(s.id) + '" data-date="' + x.date + '" data-row="' + row + '">' + html + '</td>';
+          var tip = s.name + '　' + x.d + '日（' + WD[x.dow] + '）' + (row === 'AM' ? '午前' : row === 'PM' ? '午後' : '夜');
+          h += '<td class="' + classes.join(' ') + '" title="' + esc(tip) + '" data-id="' + esc(s.id) + '" data-date="' + x.date + '" data-row="' + row + '">' + html + '</td>';
         });
         if (ri === 0) {
           var sm = r.summary[s.id], reg = s.kind === '常勤' || s.kind === '準常勤';
@@ -306,6 +309,15 @@
     $('grid').innerHTML = h;
   }
   function renderSide() {
+    if (S.mode === 'req') {
+      // 希望入力中は、人数不足などの一覧ではなく入力の案内を出す
+      var n = 0;
+      Object.keys(S.requests).forEach(function (id) { n += Object.keys(S.requests[id]).length; });
+      $('side').innerHTML = '<h2>希望入力中</h2><p>入力済み：' + n + '日分</p>' +
+        '<div class="legend"><b>入れ方</b><br>上の記号を選んでからセルを押す。セルをダブルクリックすると自由に手入力できます。<br>' +
+        'セルにマウスを乗せると、氏名と日付が出ます。<br>入力が終わったら「自動作成」を押してください（人数の表と確認の一覧は「② シフト」で出ます）。</div>';
+      return;
+    }
     var iss = S.result.issues;
     var ne = iss.filter(function (i) { return i.level === 'error'; }).length, nw = iss.length - ne;
     var h = '<h2>確認が必要なこと</h2><div class="counts"><span class="pill error">要対応 ' + ne + '</span><span class="pill warn">注意 ' + nw + '</span></div>';
