@@ -1,11 +1,14 @@
 // Code.gs の保存処理（上書き防止）を、GAS の簡易な代役で確かめる
 const fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
-function makeSheet(header) {
+function makeSheet(header, maxCols) {
   let data = [header.slice()];
+  let cols = maxCols || 26;
   return {
     getLastRow: () => data.length,
+    getMaxColumns: () => cols,
+    insertColumnsAfter: (after, n) => { cols += n; },
     getRange: (r, c, nr, nc) => ({
-      getValues: () => data.slice(r - 1, r - 1 + nr).map(row => { const x = row.slice(c - 1, c - 1 + nc); while (x.length < nc) x.push(''); return x; }),
+      getValues: () => { if (c - 1 + nc > cols) throw new Error('範囲の座標が範囲外です'); return data.slice(r - 1, r - 1 + nr).map(row => { const x = row.slice(c - 1, c - 1 + nc); while (x.length < nc) x.push(''); return x; }); },
       setValues: (v) => { v.forEach((row, i) => { data[r - 1 + i] = data[r - 1 + i] || []; row.forEach((val, j) => data[r - 1 + i][c - 1 + j] = val); }); return this; },
       clearContent: () => { data = data.slice(0, r - 1); },
       setNumberFormat() { return this; }
@@ -44,4 +47,12 @@ assert.ok(r3.ok, 'B が上書きを選べば保存できる');
 assert.strictEqual(vm.runInContext("readCells_('shift', '2026-11').S01['2026-11-02'].AM", ctx), '定休');
 const r4 = vm.runInContext("saveMonth('2026-11', {}, " + JSON.stringify(cellsB) + ", '" + r3.version.id + "', false)", ctx);
 assert.ok(r4.ok, '最新の版から続けて保存するときは止まらない');
+// 列が足りないシート（CSVを置換で読み込んだ社員シートなど）でも読める
+vm.runInContext("this.__S2 = SHEETS;", ctx);
+sheets['社員'] = makeSheet(ctx.__S2.staff.header.slice(0, 16), 16);
+sheets['社員'].getRange(2, 1, 1, 16).setValues([['S01', '宮内', '管薬', '常勤', '一', '○', '', '', '', '', '', '', '', '', '1', '']]);
+const staffRows = vm.runInContext("rows_('staff')", ctx);
+assert.strictEqual(staffRows.length, 1); assert.strictEqual(staffRows[0].length, 17, '足りない列は空欄で補う');
+vm.runInContext("ensureCols_(SpreadsheetApp.getActive().getSheetByName('社員'), 17)", ctx);
+assert.strictEqual(sheets['社員'].getMaxColumns(), 17, '列が足される');
 console.log('server tests passed');

@@ -54,6 +54,7 @@ function setup() {
       sh.setFrozenRows(1);
     } else {
       // 更新で列が増えたときは、空いている見出しだけ書き足す（データは消さない）
+      ensureCols_(sh, def.header.length);
       var cur = sh.getRange(1, 1, 1, def.header.length).getValues()[0];
       def.header.forEach(function (h, i) {
         if (!str_(cur[i])) sh.getRange(1, i + 1).setValue(h).setFontWeight('bold').setBackground('#eef2f5');
@@ -134,6 +135,7 @@ function setValidation_() {
   function list(sheetName, col, values) {
     var sh = ss.getSheetByName(sheetName);
     var rule = SpreadsheetApp.newDataValidation().requireValueInList(values, true).setAllowInvalid(true).build();
+    ensureCols_(sh, col);
     sh.getRange(2, col, Math.max(sh.getMaxRows() - 1, 500), 1).setDataValidation(rule);
   }
   var stores = rows_('stores').map(function (r) { return str_(r[0]); }).filter(Boolean);
@@ -154,11 +156,20 @@ function setValidation_() {
 }
 
 // ---------- 読み込み ----------
+// シートの列が足りないとき（CSVを「置換」で読み込むと列数が縮む）は列を足す
+function ensureCols_(sh, n) {
+  var have = sh.getMaxColumns();
+  if (have < n) sh.insertColumnsAfter(have, n - have);
+}
+
 function rows_(key) {
   var sh = SpreadsheetApp.getActive().getSheetByName(SHEETS[key].name);
   if (!sh) throw new Error('「' + SHEETS[key].name + '」シートがありません。メニューの「シフト」→「初期設定」を実行してください。');
   if (sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, SHEETS[key].header.length).getValues()
+  // 列が足りなくても、ある分だけ読んで残りは空欄として扱う
+  var width = SHEETS[key].header.length, cols = Math.min(width, sh.getMaxColumns());
+  return sh.getRange(2, 1, sh.getLastRow() - 1, cols).getValues()
+    .map(function (r) { while (r.length < width) r.push(''); return r; })
     .filter(function (r) { return r.some(function (v) { return v !== ''; }); });
 }
 
@@ -309,6 +320,7 @@ function saveStaff(s) {
       16: (s.prefOffWeekdays || []).map(function (n) { return WEEKDAYS.charAt(n); }).join(''),
       17: s.slotOnly === 'AM' ? '午前のみ' : s.slotOnly === 'PM' ? '午後のみ' : ''
     };
+    ensureCols_(sh, SHEETS.staff.header.length);
     Object.keys(extraCols).forEach(function (col) {
       col = +col;
       if (!str_(sh.getRange(1, col).getValue())) sh.getRange(1, col).setValue(SHEETS.staff.header[col - 1]).setFontWeight('bold').setBackground('#eef2f5');
