@@ -9,13 +9,13 @@
 var TZ = 'Asia/Tokyo';
 
 var SHEETS = {
-  stores: { name: '店舗', header: ['記号', '店舗名', '毎週の休業曜日（例：木）'] },
+  stores: { name: '店舗', header: ['記号', '店舗名'] },
   reqs: { name: '必要人数', header: ['店舗記号', '曜日区分（平日/土曜/日祝/当番、曜日別は月〜土）', '時間帯（午前/午後）', '薬剤師', '事務'] },
   staff: {
     name: '社員',
     header: ['ID', '氏名', '職種（管薬/薬/事務）', '区分（常勤/準常勤/非常勤/外部）', '所属店舗（記号）', '固定（○）',
       '応援できる店舗（記号を並べる）', '夜勤可（○＝両方／準夜のみ／深夜のみ）', '出勤できない曜日（例：水土）', '週の出勤上限（非常勤）',
-      '週の店舗出勤上限', '週の在宅日数', '平日の終業時刻', '土曜の終業時刻', '表示順', '休みにしたい曜日（できれば）', '勤務できる時間帯（午前のみ/午後のみ）']
+      '週の店舗出勤上限', '週の在宅日数', '平日の終業時刻', '土曜の終業時刻', '表示順', '休みにしたい曜日（できれば）', '勤務できる時間帯（午前のみ/午後のみ）', '必ず出勤する曜日（例：木）']
   },
   holidays: { name: '祝日・休業日', header: ['日付', '名称', '店舗記号（空欄＝全店舗）', '店舗休業日の扱い（空欄＝有給／公休）'] },
   extra: { name: '臨時営業', header: ['日付', '店舗記号', '時間帯（午前/午後/終日）', 'メモ'] },
@@ -198,10 +198,7 @@ var WEEKDAYS = '日月火水木金土';
 
 function getData(ym) {
   var master = {
-    stores: rows_('stores').map(function (r) {
-      return { code: str_(r[0]), name: str_(r[1]),
-        closedWeekdays: chars_(r[2]).map(function (c) { return WEEKDAYS.indexOf(c); }).filter(function (n) { return n >= 0; }) };
-    }),
+    stores: rows_('stores').map(function (r) { return { code: str_(r[0]), name: str_(r[1]) }; }),
     requirements: rows_('reqs').map(function (r) {
       return { store: str_(r[0]), dayType: str_(r[1]), slot: slot_(r[2]), pharm: num_(r[3]) || 0, clerk: num_(r[4]) || 0 };
     }),
@@ -213,7 +210,8 @@ function getData(ym) {
         weeklyMax: num_(r[9]), weeklyStoreMax: num_(r[10]), weeklyRemote: num_(r[11]) || 0,
         endWeekday: str_(r[12]), endSat: str_(r[13]), order: num_(r[14]) || (i + 1),
         prefOffWeekdays: chars_(r[15]).map(function (c) { return WEEKDAYS.indexOf(c); }).filter(function (n) { return n >= 0; }),
-        slotOnly: str_(r[16]) === '午前のみ' ? 'AM' : str_(r[16]) === '午後のみ' ? 'PM' : ''
+        slotOnly: str_(r[16]) === '午前のみ' ? 'AM' : str_(r[16]) === '午後のみ' ? 'PM' : '',
+        mustWeekdays: chars_(r[17]).map(function (c) { return WEEKDAYS.indexOf(c); }).filter(function (n) { return n >= 0; })
       };
     }).filter(function (s) { return s.id && s.name; }),
     holidays: rows_('holidays').map(function (r) { return { date: date_(r[0]), name: str_(r[1]), store: str_(r[2]), mode: str_(r[3]) }; }),
@@ -318,10 +316,11 @@ function saveStaff(s) {
       s.weeklyMax == null ? '' : s.weeklyMax, s.weeklyStoreMax == null ? '' : s.weeklyStoreMax, s.weeklyRemote || ''
     ];
     sh.getRange(i + 2, 4, 1, row.length).setValues([row]);
-    // P列：休みにしたい曜日、Q列：勤務できる時間帯（見出しが無ければ書き足す）
+    // P列：休みにしたい曜日、Q列：勤務できる時間帯、R列：必ず出勤する曜日（見出しが無ければ書き足す）
     var extraCols = {
       16: (s.prefOffWeekdays || []).map(function (n) { return WEEKDAYS.charAt(n); }).join(''),
-      17: s.slotOnly === 'AM' ? '午前のみ' : s.slotOnly === 'PM' ? '午後のみ' : ''
+      17: s.slotOnly === 'AM' ? '午前のみ' : s.slotOnly === 'PM' ? '午後のみ' : '',
+      18: (s.mustWeekdays || []).map(function (n) { return WEEKDAYS.charAt(n); }).join('')
     };
     ensureCols_(sh, SHEETS.staff.header.length);
     Object.keys(extraCols).forEach(function (col) {

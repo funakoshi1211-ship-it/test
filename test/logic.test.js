@@ -351,13 +351,20 @@ t('在宅（週1）は同じ曜日に固定せず回す', () => {
   assert.ok(wds.length >= 3, '在宅は週1回 n=' + wds.length);
   assert.ok(new Set(wds).size >= 3, '曜日がばらける ' + wds.join(','));
 });
-t('店舗の毎週の休業曜日：所属の人は休み。日曜と祝日で公休がそろう週は有給', () => {
-  const MT = Object.assign({}, M, { specialPeriods: [], stores: M.stores.map(s => s.code === '一' ? Object.assign({}, s, { closedWeekdays: [4] }) : s) });
+t('必ず出勤する曜日は休みにしない。正社員の出勤できない曜日は定休、祝日のある週は有給', () => {
+  const MT = Object.assign({}, M, { specialPeriods: [],
+    requirements: M.requirements.concat([{ store: '一', dayType: '木', slot: 'AM', pharm: 0, clerk: 0 }, { store: '一', dayType: '木', slot: 'PM', pharm: 0, clerk: 0 }]),
+    staff: M.staff.map(s => s.id === 'S1' ? Object.assign({}, s, { mustWeekdays: [4] }) : s.id === 'S19' ? Object.assign({}, s, { ngWeekdays: [4] }) : s) });
   const c = L.generate(MT, {}, 2026, 8), v = L.validate(MT, {}, c, 2026, 8);
-  // 8/13（木）は8/11（火）の山の日の週 → 有給。8/6（木）はふつうの週 → 定休
-  assert.strictEqual(c.S1['2026-08-13'].AM, '有給');
-  assert.strictEqual(c.S1['2026-08-06'].AM, '定休');
+  ['2026-08-06', '2026-08-13', '2026-08-20', '2026-08-27'].forEach(d => {
+    assert.strictEqual(c.S1[d].AM, '一', '管薬Aは木曜出勤 ' + d);
+    const others = MT.staff.filter(s => s.id !== 'S1' && c[s.id][d] && (c[s.id][d].AM === '一' || c[s.id][d].PM === '一'));
+    assert.strictEqual(others.length, 0, '木曜の一番町は管薬Aだけ ' + d + ' ' + others.map(s => s.name));
+  });
+  // 8/13（木）は8/11（火）山の日の週 → 有給。ほかの木曜は定休
+  assert.strictEqual(c.S19['2026-08-13'].AM, '有給');
+  assert.strictEqual(c.S19['2026-08-06'].AM, '定休');
   assert.strictEqual(c.S19['2026-08-20'].AM, '定休');
-  ['2026-08-06', '2026-08-20'].forEach(d => assert.ok(!(v.counts['一'][d].AM.pharm || {}).min, '木曜の一番町は必要人数なし'));
+  assert.ok(!v.issues.some(i => i.id === 'S1' && /必ず出勤/.test(i.msg)));
 });
 console.log(ok + ' passed');

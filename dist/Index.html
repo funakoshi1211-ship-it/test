@@ -145,6 +145,7 @@
     <div class="frow"><label>夜勤</label><select name="night"><option value="">しない</option><option value="both">準夜・深夜とも</option><option value="eve">準夜（16-24）のみ</option><option value="late">深夜（0-9）のみ</option></select></div>
     <div class="frow"><label>出勤できない曜日</label><span class="checks" id="sfNg"></span></div>
     <div class="frow"><label>休みにしたい曜日<br><small>（できれば）</small></label><span class="checks" id="sfPref"></span></div>
+    <div class="frow"><label>必ず出勤する曜日</label><span class="checks" id="sfMust"></span></div>
     <div class="frow"><label>勤務できる時間帯</label><select name="slotOnly"><option value="">午前・午後とも</option><option value="AM">午前のみ</option><option value="PM">午後のみ</option></select></div>
     <div class="frow"><label>週の出勤上限</label><input type="number" name="weeklyMax" min="0" max="7" placeholder="非常勤の上限（空欄＝3日）"> 日</div>
     <div class="frow"><label>週の店舗出勤上限</label><input type="number" name="weeklyStoreMax" min="0" max="7" placeholder="空欄＝上限なし"> 日</div>
@@ -232,9 +233,6 @@ var ShiftLogic = (function () {
   function buildContext(M, y, m) {
     var ctx = { y: y, m: m, M: M, days: [], storeSet: {}, stores: M.stores.map(function (s) { return s.code; }) };
     ctx.stores.forEach(function (c) { ctx.storeSet[c] = true; });
-    // 毎週の休業曜日（店舗シートC列。例：一番町は木曜）
-    ctx.storeWd = {};
-    M.stores.forEach(function (s) { ctx.storeWd[s.code] = s.closedWeekdays || []; });
     ALL_STORES = ctx.stores.slice();
     // 休業日。店舗が空欄なら全店舗、記号があればその店舗だけ
     var hol = {}, storeHol = {}, storeHolMode = {};
@@ -277,15 +275,13 @@ var ShiftLogic = (function () {
   function openKind(ctx, store, date, slot) {
     var day = ctx.dayOf[date];
     if (!day) return null;
-    var normal = !day.closed && !ctx.storeHol[date + '|' + store] && !weeklyClosed(ctx, store, date) && (day.dow !== 6 || slot === 'AM');
+    var normal = !day.closed && !ctx.storeHol[date + '|' + store] && (day.dow !== 6 || slot === 'AM');
     if (normal) return 'normal';
     // 臨時営業（日曜の半日営業など）：必要な人数だけ配置する
     if (ctx.extra[date + '|' + store + '|' + slot]) return 'extra';
     if (day.duty && store === DUTY_STORE) return 'duty';
     return null;
   }
-
-  function weeklyClosed(ctx, store, date) { return (ctx.storeWd[store] || []).indexOf(dow(date)) >= 0; }
 
   // 月の外の日も含めて、その店舗がその日まるごと休みか（特別期間の休日数の見込みに使う）
   // 日曜・全店の祝日（代休の対象になる日）
@@ -294,7 +290,7 @@ var ShiftLogic = (function () {
   // ignoreExtra：臨時営業でも「本来は休み（日曜・祝日・休業日）」として見る
   function closedOn(ctx, store, date, ignoreExtra) {
     if (!ignoreExtra && (ctx.extra[date + '|' + store + '|AM'] || ctx.extra[date + '|' + store + '|PM'])) return false;
-    return dow(date) === 0 || !!ctx.hol[date] || !!ctx.storeHol[date + '|' + store] || weeklyClosed(ctx, store, date);
+    return dow(date) === 0 || !!ctx.hol[date] || !!ctx.storeHol[date + '|' + store];
   }
 
   // 正社員の休日数をそろえる特別期間（この月にかかるもの）
@@ -427,6 +423,7 @@ var ShiftLogic = (function () {
     function offRequested(id, date, key) { var v = reqVal(R, id, date, key); return OFF.indexOf(v) >= 0; }
     function ngDay(s, date) { return (s.ngWeekdays || []).indexOf(dow(date)) >= 0; }
     function prefOff(s, date) { return (s.prefOffWeekdays || []).indexOf(dow(date)) >= 0; }
+    function mustWork(s, date) { return (s.mustWeekdays || []).indexOf(dow(date)) >= 0; }
 
     // 1. 夜間当番（三番町）
     ctx.days.forEach(function (x) {
@@ -631,13 +628,12 @@ var ShiftLogic = (function () {
       // 休みを取りにくい（固定配置の）人から決める
       var order = regulars.slice().sort(function (a, b) { return (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0); });
       order.forEach(function (s) {
-        // 所属店舗の毎週の休業曜日は休み。公休が足りない週は「定休」、
-        // 日曜と祝日で週2日の公休がそろっている週は「有給」にする
+        // 正社員の「出勤できない曜日」は毎週の休み。ふつうの週は公休（定休）、
+        // 日曜以外の祝日がある週（日曜と祝日で公休2日がそろう週）は有給にする
         wk.days.forEach(function (x) {
-          if (!s.home || x.closed || !weeklyClosed(ctx, s.home, x.date)) return;
+          if (!ngDay(s, x.date) || !homeOpenSlots(s, x.date).length) return;
           var c = peek(cells, s.id, x.date);
-          if (dayLocked(s.id, x.date) || c.N || isWorkingCell(ctx, c) || SLOTS.some(function (k) { return c[k]; })) return;
-          if (SLOTS.some(function (k) { return openKind(ctx, s.home, x.date, k); })) return; // 臨時営業で開いている
+          if (dayLocked(s.id, x.date) || c.N || SLOTS.some(function (k) { return c[k]; })) return;
           // その週（日〜土）の日曜・祝日の数。月の外の日も暦で数える
           var others = 0;
           for (var i = 0; i < 7; i++) {
@@ -645,8 +641,7 @@ var ShiftLogic = (function () {
             if (d !== x.date && sundayOrHoliday(ctx, d)) others++;
           }
           var code = others >= WEEK_OFF ? '有給' : '定休';
-          c = cellOf(cells, s.id, x.date);
-          SLOTS.forEach(function (k) { if (x.dow !== 6 || k === 'AM') c[k] = code; });
+          homeOpenSlots(s, x.date).forEach(function (k) { c[k] = code; });
         });
         // 公休の数（有給・特休は数えない）
         var off = wk.days.filter(function (x) { return plannedOff(s, x.date) && !isLeaveDay(ctx, peek(cells, s.id, x.date)); }).length;
@@ -658,7 +653,7 @@ var ShiftLogic = (function () {
         for (var i = 0; i < need; i++) {
           var cand = wk.days.filter(function (x) {
             return !plannedOff(s, x.date) && !dayLocked(s.id, x.date) && !peek(cells, s.id, x.date).N &&
-              !isStoreDay(ctx, peek(cells, s.id, x.date));
+              !isStoreDay(ctx, peek(cells, s.id, x.date)) && !mustWork(s, x.date);
           });
           if (!cand.length) break;
           cand.sort(function (a, b) {
@@ -684,7 +679,7 @@ var ShiftLogic = (function () {
           for (var j = 0; j < remote; j++) {
             var c2 = workDays.filter(function (x) {
               var c = peek(cells, s.id, x.date);
-              return !dayLocked(s.id, x.date) && !c.N && !isStoreDay(ctx, c) && SLOTS.every(function (k) { return c[k] !== '在宅'; });
+              return !dayLocked(s.id, x.date) && !c.N && !isStoreDay(ctx, c) && !mustWork(s, x.date) && SLOTS.every(function (k) { return c[k] !== '在宅'; });
             });
             if (!c2.length) break;
             // 人に余裕のある日を優先。同じなら、その月にまだ在宅にしていない曜日へ回す（月曜ばかりにならないように）
@@ -727,7 +722,7 @@ var ShiftLogic = (function () {
         if (!found) break;
         var cand = found.filter(function (x) {
           var c = peek(cells, s.id, x.date);
-          return !dayLocked(s.id, x.date) && !c.N && homeOpenSlots(s, x.date).length &&
+          return !dayLocked(s.id, x.date) && !c.N && homeOpenSlots(s, x.date).length && !mustWork(s, x.date) &&
             SLOTS.every(function (k) { return !c[k] || c[k] === s.home; });
         });
         if (!cand.length) break;
@@ -872,7 +867,7 @@ var ShiftLogic = (function () {
         while (off < target && guard++ < 31) {
           var cand = inMonth.filter(function (x) {
             var c = peek(cells, s.id, x.date);
-            return isStoreDay(ctx, c) && !dayLocked(s.id, x.date) && !c.N;
+            return isStoreDay(ctx, c) && !dayLocked(s.id, x.date) && !c.N && !mustWork(s, x.date);
           });
           if (!cand.length) break;
           var slack = function (x) {
@@ -1048,6 +1043,8 @@ var ShiftLogic = (function () {
         if (rn === NIGHT_NG && c.N) add('error', s.name + '：夜勤できない日（夜×）に夜勤が入っています', s.id, x.date);
         else if (rn && rn !== NIGHT_OK && rn !== NIGHT_NG && rn !== c.N) add('warn', s.name + '：希望（' + rn + '）と違います', s.id, x.date);
         if (working && (s.ngWeekdays || []).indexOf(x.dow) >= 0) add('error', s.name + '：出勤できない曜日です', s.id, x.date);
+        if (!working && (s.mustWeekdays || []).indexOf(x.dow) >= 0 && s.home && !reqVal(R, s.id, x.date, 'AM') && !reqVal(R, s.id, x.date, 'PM') &&
+          SLOTS.some(function (k) { return openKind(ctx, s.home, x.date, k) === 'normal'; })) add('warn', s.name + '：必ず出勤する曜日が休みになっています', s.id, x.date);
         if (c.N) {
           if (!nightOK(s, c.N === '準夜' ? 'eve' : 'late')) add('error', s.name + '：' + c.N + '勤に入れない人です', s.id, x.date);
           if (c.N === '準夜') {
@@ -1622,6 +1619,9 @@ if (typeof module !== 'undefined') module.exports = SAMPLE;
     $('sfPref').innerHTML = WD.split('').map(function (w, i) {
       return '<label><input type="checkbox" name="pref" value="' + i + '"' + ((s.prefOffWeekdays || []).indexOf(i) >= 0 ? ' checked' : '') + '>' + w + '</label>';
     }).join('');
+    $('sfMust').innerHTML = WD.split('').map(function (w, i) {
+      return '<label><input type="checkbox" name="must" value="' + i + '"' + ((s.mustWeekdays || []).indexOf(i) >= 0 ? ' checked' : '') + '>' + w + '</label>';
+    }).join('');
     f.weeklyMax.value = s.weeklyMax || '';
     f.slotOnly.value = s.slotOnly || '';
     f.weeklyStoreMax.value = s.weeklyStoreMax || '';
@@ -1641,6 +1641,7 @@ if (typeof module !== 'undefined') module.exports = SAMPLE;
       .filter(function (c) { return c !== s.home; });
     s.ngWeekdays = Array.prototype.map.call(f.querySelectorAll('input[name=ng]:checked'), function (i) { return +i.value; });
     s.prefOffWeekdays = Array.prototype.map.call(f.querySelectorAll('input[name=pref]:checked'), function (i) { return +i.value; });
+    s.mustWeekdays = Array.prototype.map.call(f.querySelectorAll('input[name=must]:checked'), function (i) { return +i.value; });
     s.slotOnly = f.slotOnly.value;
     s.weeklyMax = num(f.weeklyMax.value);
     s.weeklyStoreMax = num(f.weeklyStoreMax.value);

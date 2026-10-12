@@ -374,6 +374,9 @@
     $('sfPref').innerHTML = WD.split('').map(function (w, i) {
       return '<label><input type="checkbox" name="pref" value="' + i + '"' + ((s.prefOffWeekdays || []).indexOf(i) >= 0 ? ' checked' : '') + '>' + w + '</label>';
     }).join('');
+    $('sfMust').innerHTML = WD.split('').map(function (w, i) {
+      return '<label><input type="checkbox" name="must" value="' + i + '"' + ((s.mustWeekdays || []).indexOf(i) >= 0 ? ' checked' : '') + '>' + w + '</label>';
+    }).join('');
     f.weeklyMax.value = s.weeklyMax || '';
     f.slotOnly.value = s.slotOnly || '';
     f.weeklyStoreMax.value = s.weeklyStoreMax || '';
@@ -393,6 +396,7 @@
       .filter(function (c) { return c !== s.home; });
     s.ngWeekdays = Array.prototype.map.call(f.querySelectorAll('input[name=ng]:checked'), function (i) { return +i.value; });
     s.prefOffWeekdays = Array.prototype.map.call(f.querySelectorAll('input[name=pref]:checked'), function (i) { return +i.value; });
+    s.mustWeekdays = Array.prototype.map.call(f.querySelectorAll('input[name=must]:checked'), function (i) { return +i.value; });
     s.slotOnly = f.slotOnly.value;
     s.weeklyMax = num(f.weeklyMax.value);
     s.weeklyStoreMax = num(f.weeklyStoreMax.value);
