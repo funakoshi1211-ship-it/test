@@ -416,7 +416,8 @@ function exportPrint(ym, cells, note) {
   for (var c = 4; c <= width; c++) sh.setColumnWidth(c, 36);
   sh.setRowHeights(1, top + 4, 20);
   sh.setRowHeight(1, 28);
-  sh.setFrozenRows(2); sh.setFrozenColumns(3);
+  // 上の2行（日付・曜日）だけ固定する。列を固定すると、備考欄の結合（左端から横に広がる）とぶつかってエラーになる
+  sh.setFrozenRows(2);
   SpreadsheetApp.flush();
 
   // A3横・1枚に収めたPDF（ブラウザで開いて印刷する）

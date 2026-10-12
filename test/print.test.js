@@ -8,16 +8,21 @@ function chain(extra) {
     apply() { return chain(); }
   });
 }
-const state = { frozenCols: 0 };
+const state = { frozenCols: 0, merges: [] };
 const sheet = chain({
-  setFrozenColumns: (n) => { state.frozenCols = n; },
+  // 本物と同じく、結合したセルが列の固定の境目をまたぐときは固定できない
+  setFrozenColumns: (n) => {
+    if (state.merges.some(m => m.c <= n && m.c + m.w - 1 > n)) throw new Error('固定されている列と固定されていない列は結合できません。');
+    state.frozenCols = n;
+  },
+  clear: () => { state.merges = []; },
   getRange: (r, c, h, w) => {
     // どのメソッドを呼んでも同じ範囲を返し、書き込んだ値だけ記録する
     const range = new Proxy({}, { get(t, k) {
       if (k === 'setValues') return (v) => { written.push({ r, c, v }); return range; };
       if (k === 'setValue') return (v) => { written.push({ r, c, v: [[v]] }); return range; };
       // 本物と同じく、固定した列の境目をまたいで結合するとエラーにする
-      if (k === 'merge') return () => { if (state.frozenCols && c <= state.frozenCols && c + (w || 1) - 1 > state.frozenCols) throw new Error('固定されている列と固定されていない列は結合できません。'); return range; };
+      if (k === 'merge') return () => { if (state.frozenCols && c <= state.frozenCols && c + (w || 1) - 1 > state.frozenCols) throw new Error('固定されている列と固定されていない列は結合できません。'); state.merges.push({ c, w: w || 1 }); return range; };
       return () => range;
     } });
     return range;
@@ -46,7 +51,7 @@ assert.strictEqual(grid[b][col(1)], ''); assert.strictEqual(grid[b + 1][col(1)],
 assert.strictEqual(grid[c][col(5)], '中 8:30-14:30', '手入力の文字はそのまま');
 assert.ok(written.some(w => String(w.v[0][0]).includes('川又')), '備考が入る');
 // 2回目（印刷用シートがすでにあり、列が固定されている）も作り直せる
-assert.strictEqual(state.frozenCols, 3);
+state.frozenCols = 3;
 written.length = 0;
 vm.runInContext('exportPrint', ctx)('2026-08', cells, '');
 assert.ok(written.length > 0, '2回目も作成できる');
