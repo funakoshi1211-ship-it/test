@@ -8,12 +8,16 @@ function chain(extra) {
     apply() { return chain(); }
   });
 }
+const state = { frozenCols: 0 };
 const sheet = chain({
-  getRange: (r, c) => {
+  setFrozenColumns: (n) => { state.frozenCols = n; },
+  getRange: (r, c, h, w) => {
     // どのメソッドを呼んでも同じ範囲を返し、書き込んだ値だけ記録する
     const range = new Proxy({}, { get(t, k) {
       if (k === 'setValues') return (v) => { written.push({ r, c, v }); return range; };
       if (k === 'setValue') return (v) => { written.push({ r, c, v: [[v]] }); return range; };
+      // 本物と同じく、固定した列の境目をまたいで結合するとエラーにする
+      if (k === 'merge') return () => { if (state.frozenCols && c <= state.frozenCols && c + (w || 1) - 1 > state.frozenCols) throw new Error('固定されている列と固定されていない列は結合できません。'); return range; };
       return () => range;
     } });
     return range;
@@ -22,7 +26,7 @@ const sheet = chain({
 });
 const ctx = {
   console, Utilities: { formatDate: (d, tz, f) => { const p = n => String(n).padStart(2, '0'); return f === 'yyyy-MM' ? d.getFullYear() + '-' + p(d.getMonth() + 1) : d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); } },
-  SpreadsheetApp: { getActive: () => chain({ getSheetByName: () => null, insertSheet: () => sheet, getUrl: () => 'https://sheet', getId: () => 'ID' }), flush() {}, BorderStyle: {} },
+  SpreadsheetApp: { getActive: () => chain({ getSheetByName: () => (state.exists ? sheet : null), insertSheet: () => { state.exists = true; return sheet; }, getUrl: () => 'https://sheet', getId: () => 'ID' }), flush() {}, BorderStyle: {} },
   PropertiesService: { getDocumentProperties: () => ({ getProperty: () => null }) }
 };
 vm.createContext(ctx);
@@ -41,4 +45,9 @@ assert.strictEqual(grid[a][col(4)], '0-9'); assert.strictEqual(grid[a + 1][col(4
 assert.strictEqual(grid[b][col(1)], ''); assert.strictEqual(grid[b + 1][col(1)], '16-24');
 assert.strictEqual(grid[c][col(5)], '中 8:30-14:30', '手入力の文字はそのまま');
 assert.ok(written.some(w => String(w.v[0][0]).includes('川又')), '備考が入る');
+// 2回目（印刷用シートがすでにあり、列が固定されている）も作り直せる
+assert.strictEqual(state.frozenCols, 3);
+written.length = 0;
+vm.runInContext('exportPrint', ctx)('2026-08', cells, '');
+assert.ok(written.length > 0, '2回目も作成できる');
 console.log('print tests passed');

@@ -343,7 +343,11 @@ function exportPrint(ym, cells, note) {
   var ss = SpreadsheetApp.getActive();
   var name = '印刷_' + ym;
   var sh = ss.getSheetByName(name);
-  if (sh) { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart(); sh.clear(); } else sh = ss.insertSheet(name);
+  if (sh) {
+    // 作り直すときは、先に固定（行・列）を外す。固定したままだと備考欄などを結合できない
+    sh.setFrozenRows(0); sh.setFrozenColumns(0);
+    sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart(); sh.clear();
+  } else sh = ss.insertSheet(name);
 
   var p = ym.split('-'), y = +p[0], m = +p[1];
   var n = new Date(y, m, 0).getDate();
