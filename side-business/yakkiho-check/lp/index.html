@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>薬剤師の広告表現チェック</title>
+<meta name="description" content="化粧品・健康食品の広告表現を、薬剤師が薬機法・景品表示法の観点でチェックし、言い換え案までお届けします。">
+<style>
+:root{
+  --bg:#fbfaf7; --surface:#ffffff; --text:#1f2328; --muted:#5b6470; --line:#e4e1da;
+  --accent:#1f6f5c; --accent-ink:#ffffff; --ng:#b42318; --warn:#a15c00; --check:#2459a6;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15181b; --surface:#1d2125; --text:#e8eaed; --muted:#a3abb5; --line:#2f353b;
+    --accent:#5fc3a6; --accent-ink:#0f1a17; --ng:#ff8a80; --warn:#ffc266; --check:#8ab4ff;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15181b; --surface:#1d2125; --text:#e8eaed; --muted:#a3abb5; --line:#2f353b;
+  --accent:#5fc3a6; --accent-ink:#0f1a17; --ng:#ff8a80; --warn:#ffc266; --check:#8ab4ff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;line-height:1.8}
+.wrap{max-width:880px;margin:0 auto;padding:0 16px}
+header{padding:56px 0 40px;border-bottom:1px solid var(--line)}
+.eyebrow{color:var(--accent);font-weight:700;font-size:.9rem;letter-spacing:.04em}
+h1{font-size:clamp(1.6rem,4.5vw,2.4rem);line-height:1.35;margin:.4em 0}
+h2{font-size:1.35rem;margin:0 0 .8em}
+section{padding:44px 0;border-bottom:1px solid var(--line)}
+p.lead{color:var(--muted);font-size:1.05rem}
+.btn{display:inline-block;background:var(--accent);color:var(--accent-ink);padding:12px 22px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:12px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+.card h3{margin:0 0 .4em;font-size:1.05rem}
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:.95rem}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.tablewrap{overflow-x:auto}
+.tag{font-weight:700}
+.ng{color:var(--ng)} .warn{color:var(--warn)} .check{color:var(--check)}
+ol.steps{padding-left:1.2em}
+ol.steps li{margin-bottom:.5em}
+details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:10px}
+summary{cursor:pointer;font-weight:600}
+.note{color:var(--muted);font-size:.9rem}
+footer{padding:32px 0 48px;color:var(--muted);font-size:.85rem}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="eyebrow">化粧品・健康食品の広告をお持ちの方へ</div>
+    <h1>その表現、薬機法に触れていませんか。<br>薬剤師が添削し、使える言い換えまでお届けします。</h1>
+    <p class="lead">LP、商品ページ、記事、SNS投稿を、薬機法・景品表示法の観点でチェック。48時間以内にレポートでお返しします。</p>
+    <a class="btn" href="#contact">まずは1本、無料でチェックする</a>
+  </div>
+</header>
+
+<main>
+<section>
+  <div class="wrap">
+    <h2>こんなお悩みはありませんか</h2>
+    <div class="grid">
+      <div class="card"><h3>表現の線引きが分からない</h3><p>「どこまで言っていいか」が分からず、広告が弱くなる。または不安なまま出している。</p></div>
+      <div class="card"><h3>NGと言われても代案がない</h3><p>指摘だけでは原稿が直せず、制作が止まってしまう。</p></div>
+      <div class="card"><h3>確認が追いつかない</h3><p>インフルエンサーの投稿やLPの差し替えが多く、毎回の確認が負担になっている。</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>お届けするもの</h2>
+    <p>指摘を3段階に分け、理由と言い換え案、確認が必要な点をまとめたレポートをお返しします。</p>
+    <div class="tablewrap">
+    <table>
+      <tr><th>該当箇所</th><th>判定</th><th>理由</th><th>言い換え案</th></tr>
+      <tr><td>シミが消える</td><td class="tag ng">NG</td><td>化粧品で言える効能の範囲（56項目）の外</td><td>日やけによるシミ・ソバカスを防ぐ（紫外線防止効果がある場合）</td></tr>
+      <tr><td>満足度No.1（当社調べ）</td><td class="tag check">要確認</td><td>調査の対象・方法が客観的に妥当である必要がある</td><td>調査の概要を近くに明記</td></tr>
+      <tr><td>今だけ初回1,980円</td><td class="tag warn">要注意</td><td>通常価格の販売実績がないと不当な二重価格になる恐れ</td><td>販売実績がなければ比較表示を削除</td></tr>
+    </table>
+    </div>
+    <p class="note">※架空の商品による見本です。</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>対応範囲</h2>
+    <div class="grid">
+      <div class="card"><h3>商品</h3><p>化粧品／医薬部外品／健康食品・サプリ／機能性表示食品／美容機器・雑貨</p></div>
+      <div class="card"><h3>媒体</h3><p>LP、商品ページ、記事、Instagram・X・TikTokの投稿文、チラシ など</p></div>
+      <div class="card"><h3>観点</h3><p>薬機法（効能の範囲・保証・最大級表現・推薦・体験談）、景品表示法（No.1・価格・ステマ）、健康増進法</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>進め方</h2>
+    <ol class="steps">
+      <li>商品区分、承認や届出の内容、原稿をお送りください。</li>
+      <li>AIで一次チェックを行い、見落としを減らします。</li>
+      <li>薬剤師がすべての指摘を確認し、言い換え案を整えます。</li>
+      <li>48時間以内（特急は24時間）にレポートでお返しします。同じ原稿の再チェックは1回まで無料です。</li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>料金（税込）</h2>
+    <div class="tablewrap">
+    <table>
+      <tr><th>メニュー</th><th>料金</th><th>内容</th></tr>
+      <tr><td>スポット</td><td>11,000円</td><td>2,000文字・画像3枚まで。超過1,000文字ごとに3,300円</td></tr>
+      <tr><td>月額ライト</td><td>33,000円／月</td><td>月5本まで・48時間以内に返却</td></tr>
+      <tr><td>月額スタンダード</td><td>55,000円／月</td><td>月10本まで・優先対応・四半期ごとの傾向まとめ</td></tr>
+      <tr><td>制作会社パートナー</td><td>55,000円／月〜</td><td>月12本まで・貴社名義での納品にも対応</td></tr>
+    </table>
+    </div>
+    <p class="note">特急（24時間以内）は各料金の50%増です。</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>よくあるご質問</h2>
+    <details><summary>法律事務所のリーガルチェックと何が違いますか</summary><p>当サービスは広告表現の校正と助言に特化しています。法的な見解書の作成や、行政対応・紛争への対応はお受けできません。必要な場合は弁護士への相談をおすすめしています。その分、料金を抑え、返却を早くしています。</p></details>
+    <details><summary>AIの判定をそのまま返すのですか</summary><p>いいえ。AIは見落としを減らすための一次チェックに使い、すべての指摘を薬剤師が確認してからお返しします。原稿は、学習に使われない設定のサービスでのみ扱います。</p></details>
+    <details><summary>広告に「薬剤師監修」と載せてもいいですか</summary><p>できません。医薬関係者が推薦している旨の広告は、医薬品等適正広告基準で認められていないためです。</p></details>
+    <details><summary>掲載してよいかを最終的に決めてもらえますか</summary><p>掲載の最終判断は依頼者さまにお願いしています。判断に必要な根拠と選択肢を、できるだけ具体的にお示しします。</p></details>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="wrap">
+    <h2>お問い合わせ・無料チェックのお申込み</h2>
+    <p>初回は1本（2,000文字まで）を無料でチェックします。下のフォームから、商品区分と原稿をお送りください。</p>
+    <!-- Googleフォームなどの申込みフォームのURLに差し替える -->
+    <a class="btn" href="https://forms.gle/REPLACE_ME">申込みフォームを開く</a>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>（屋号）／運営：薬剤師（氏名）</p>
+    <p>本サービスは広告表現の校正と助言を目的としたもので、法令への適合を保証するものではありません。</p>
+  </div>
+</footer>
+</body>
+</html>
