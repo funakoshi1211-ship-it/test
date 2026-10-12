@@ -9,7 +9,7 @@
 var TZ = 'Asia/Tokyo';
 
 var SHEETS = {
-  stores: { name: '店舗', header: ['記号', '店舗名'] },
+  stores: { name: '店舗', header: ['記号', '店舗名', '毎週の休業曜日（例：木）'] },
   reqs: { name: '必要人数', header: ['店舗記号', '曜日区分（平日/土曜/日祝/当番、曜日別は月〜土）', '時間帯（午前/午後）', '薬剤師', '事務'] },
   staff: {
     name: '社員',
@@ -198,7 +198,10 @@ var WEEKDAYS = '日月火水木金土';
 
 function getData(ym) {
   var master = {
-    stores: rows_('stores').map(function (r) { return { code: str_(r[0]), name: str_(r[1]) }; }),
+    stores: rows_('stores').map(function (r) {
+      return { code: str_(r[0]), name: str_(r[1]),
+        closedWeekdays: chars_(r[2]).map(function (c) { return WEEKDAYS.indexOf(c); }).filter(function (n) { return n >= 0; }) };
+    }),
     requirements: rows_('reqs').map(function (r) {
       return { store: str_(r[0]), dayType: str_(r[1]), slot: slot_(r[2]), pharm: num_(r[3]) || 0, clerk: num_(r[4]) || 0 };
     }),

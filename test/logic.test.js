@@ -351,4 +351,13 @@ t('在宅（週1）は同じ曜日に固定せず回す', () => {
   assert.ok(wds.length >= 3, '在宅は週1回 n=' + wds.length);
   assert.ok(new Set(wds).size >= 3, '曜日がばらける ' + wds.join(','));
 });
+t('店舗の毎週の休業曜日：所属の人は休み。日曜と祝日で公休がそろう週は有給', () => {
+  const MT = Object.assign({}, M, { specialPeriods: [], stores: M.stores.map(s => s.code === '一' ? Object.assign({}, s, { closedWeekdays: [4] }) : s) });
+  const c = L.generate(MT, {}, 2026, 8), v = L.validate(MT, {}, c, 2026, 8);
+  // 8/13（木）は8/11（火）の山の日の週 → 有給。8/6（木）はふつうの週 → 定休
+  assert.strictEqual(c.S1['2026-08-13'].AM, '有給');
+  assert.strictEqual(c.S1['2026-08-06'].AM, '定休');
+  assert.strictEqual(c.S19['2026-08-20'].AM, '定休');
+  ['2026-08-06', '2026-08-20'].forEach(d => assert.ok(!(v.counts['一'][d].AM.pharm || {}).min, '木曜の一番町は必要人数なし'));
+});
 console.log(ok + ' passed');
