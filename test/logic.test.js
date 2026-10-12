@@ -367,4 +367,15 @@ t('必ず出勤する曜日は休みにしない。正社員の出勤できな�
   assert.strictEqual(c.S19['2026-08-20'].AM, '定休');
   assert.ok(!v.issues.some(i => i.id === 'S1' && /必ず出勤/.test(i.msg)));
 });
+t('月初の週は、前の月の保存済みシフトの休みも数える', () => {
+  // 8/1（土）の週は7/26（日）〜。7/27〜31に出勤していれば、週2日の公休のうち1日は8/1に入る
+  const adj = { S6: {} };
+  ['27', '28', '29', '30', '31'].forEach(d => { adj.S6['2026-07-' + d] = { AM: '中', PM: '中', N: '' }; });
+  const MA = Object.assign({}, M, { adjacent: adj });
+  const c = L.generate(MA, {}, 2026, 8), v = L.validate(MA, {}, c, 2026, 8);
+  assert.strictEqual(c.S6['2026-08-01'].AM, '定休', '8/1は公休');
+  // 前の月が保存されていない人は、これまでどおり月の外で休んだとみなす
+  assert.notStrictEqual(c.S7['2026-08-01'].AM, '定休');
+  assert.ok(!v.issues.some(i => i.id === 'S6' && /週の公休/.test(i.msg)));
+});
 console.log(ok + ' passed');

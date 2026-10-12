@@ -390,6 +390,21 @@ var ShiftLogic = (function () {
     return wk.days.filter(function (x) { return isWorkingCell(ctx, peek(cells, id, x.date)); }).length;
   }
 
+  // 週のうち月の外の日（月初・月末の週）の公休の数。
+  // 前後の月のシフトが保存されていればその休みを数え、なければ月の外の日はすべて休みとみなす（従来どおり）
+  function outsideOff(ctx, s, wk) {
+    if (!wk.missing) return 0;
+    var adj = (ctx.M.adjacent || {})[s.id], first = wk.days[0], last = wk.days[wk.days.length - 1], dates = [];
+    for (var i = first.dow; i > 0; i--) dates.push(addDays(first.date, -i));
+    for (var j = last.dow + 1; j <= 6; j++) dates.push(addDays(last.date, j - last.dow));
+    var saved = adj && Object.keys(adj).some(function (d) { return d.slice(0, 7) === dates[0].slice(0, 7); });
+    if (!saved) return wk.missing;
+    return dates.filter(function (d) {
+      var c = adj[d];
+      return !c || (!isWorkingCell(ctx, c) && !isLeaveDay(ctx, c));
+    }).length;
+  }
+
   // 特別期間の公休の日数（店舗の休業日・定休・休。有給・特休は数えない）。
   // 月の外の日は、保存済みのシフトがあればそれを、なければ店舗の休業日から見込む
   function periodOff(ctx, cells, s, p) {
@@ -645,7 +660,7 @@ var ShiftLogic = (function () {
         });
         // 公休の数（有給・特休は数えない）
         var off = wk.days.filter(function (x) { return plannedOff(s, x.date) && !isLeaveDay(ctx, peek(cells, s.id, x.date)); }).length;
-        var need = Math.max(0, WEEK_OFF - off - wk.missing);
+        var need = Math.max(0, WEEK_OFF - off - outsideOff(ctx, s, wk));
         // 日曜・祝日（自分の店舗の休業日）に出勤した日数。その分の休みは「代休」にする
         var workedClosed = wk.days.filter(function (x) {
           return sundayOrHoliday(ctx, x.date) && isWorkingCell(ctx, peek(cells, s.id, x.date));
@@ -816,7 +831,7 @@ var ShiftLogic = (function () {
         return r ? r.min - countAt(ctx, cells, store, date, k, role) : 0;
       }
       function restOk(s, date) {
-        var wk = weekOf(ctx, date), need = Math.max(0, WEEK_OFF - wk.missing);
+        var wk = weekOf(ctx, date), need = Math.max(0, WEEK_OFF - outsideOff(ctx, s, wk));
         var rest = wk.days.filter(function (x) {
           if (x.date === date) return false;
           var c = peek(cells, s.id, x.date);
@@ -1063,7 +1078,7 @@ var ShiftLogic = (function () {
             var c = peek(cells, s.id, x.date);
             return !isWorkingCell(ctx, c) && !isLeaveDay(ctx, c);
           }).length;
-          var need = Math.max(0, WEEK_OFF - wk.missing);
+          var need = Math.max(0, WEEK_OFF - outsideOff(ctx, s, wk));
           if (rest < need) add('error', s.name + '：週の公休が' + rest + '日（2日必要。有給・特休は別）', s.id, wk.days[0].date);
         }
         if (s.weeklyStoreMax) {
