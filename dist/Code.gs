@@ -337,7 +337,7 @@ function saveStaff(s) {
 // 画面用の記号のうち、印刷では出さないもの（入：深夜勤の前日の午後、夜：準夜勤の日の日中、明：深夜勤明け）
 function printable_(v) { return v === '入' || v === '夜' || v === '明' ? '' : (v || ''); }
 
-function exportPrint(ym, cells, note) {
+function exportPrint(ym, cells, note, paper) {
   var data = getData(ym);
   if (note === undefined || note === null) note = data.note || '';
   var ss = SpreadsheetApp.getActive();
@@ -420,9 +420,11 @@ function exportPrint(ym, cells, note) {
   sh.setFrozenRows(2);
   SpreadsheetApp.flush();
 
-  // A3横・1枚に収めたPDF（ブラウザで開いて印刷する）
+  // 横向き・1枚に収めたPDF（ブラウザで開いて印刷する）。用紙は A4（既定）か A3
+  var size = paper === 'A3' ? 'A3' : 'A4', margin = size === 'A3' ? '0.4' : '0.25';
   var pdf = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=pdf&gid=' + sh.getSheetId() +
-    '&size=A3&portrait=false&fitw=true&gridlines=false&printtitle=false&sheetnames=false&pagenum=UNDEFINED' +
-    '&fzr=false&top_margin=0.4&bottom_margin=0.4&left_margin=0.4&right_margin=0.4&horizontal_alignment=CENTER&vertical_alignment=TOP';
+    '&size=' + size + '&portrait=false&scale=4&gridlines=false&printtitle=false&sheetnames=false&pagenum=UNDEFINED' +
+    '&fzr=false&top_margin=' + margin + '&bottom_margin=' + margin + '&left_margin=' + margin + '&right_margin=' + margin +
+    '&horizontal_alignment=CENTER&vertical_alignment=TOP';
   return { sheet: ss.getUrl() + '#gid=' + sh.getSheetId(), pdf: pdf };
 }

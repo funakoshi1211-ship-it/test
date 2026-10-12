@@ -82,14 +82,14 @@
     var errs = S.result.issues.filter(function (i) { return i.level === 'error'; }).length;
     status('自動作成しました（要確認 ' + errs + '件）');
   }
-  function printSheet(asPdf) {
+  function printSheet(asPdf, paper) {
     if (DEMO) { toast('デモでは印刷用シートを作れません'); return; }
     if (S.dirty && !confirm('保存していない変更があります。画面の内容で印刷用シートを作りますか？（保存は別に押してください）')) return;
     // ポップアップが止められないよう、押したときに先にウィンドウを開いておく
     var w = window.open('', '_blank');
     if (w) w.document.write('<p style="font-family:sans-serif">印刷用シートを作成中です…</p>');
     status('印刷用シートを作成中…');
-    call('exportPrint', S.ym, S.cells, S.note || '').then(function (r) {
+    call('exportPrint', S.ym, S.cells, S.note || '', paper || 'A4').then(function (r) {
       status('印刷用シートを作成しました');
       var url = asPdf ? r.pdf : r.sheet;
       if (w) w.location.href = url; else window.open(url, '_blank');
@@ -339,7 +339,7 @@
       '<b>右端の集計</b>　正社員の公休・有給等の日数。特別期間は「休み/そろえる日数」（黄＝少ない、青＝多い）<br>' +
       '<b>日付の点線</b>　一部の店舗だけ休業（日付にマウスを乗せると店舗名）<br>' +
       '<b>手入力</b>　セルをダブルクリック（または「✎ 手入力」を選んでセルを押す）と、「三 8:30-14:30」などを自由に書けます。先頭が店舗の記号ならその店舗の人数に数えます<br>' +
-      '<b>印刷</b>　「備考」を書いて保存 →「印刷（PDF・A3横）」で1枚にまとまったPDFが開きます</div>';
+      '<b>印刷</b>　「備考」を書いて保存 →「印刷（PDF・A4横）」で1枚にまとまったPDFが開きます（大きく出したいときは「A3横」）</div>';
     $('side').innerHTML = h;
   }
   function onSide(e) {
@@ -420,6 +420,7 @@
     $('btnSave').onclick = function () { save(false); };
     $('btnPrint').onclick = function () { printSheet(false); };
     $('btnPdf').onclick = function () { printSheet(true); };
+    $('btnPdfA3').onclick = function () { printSheet(true, 'A3'); };
     $('btnNote').onclick = function () { $('noteText').value = S.note || ''; $('noteDlg').showModal(); };
     $('noteCancel').onclick = function () { $('noteDlg').close(); };
     $('noteForm').onsubmit = function (e) {

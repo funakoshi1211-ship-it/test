@@ -40,7 +40,7 @@ ctx.getData = () => ({ master: S.master, note: '' });
 const cells = { S1: { '2026-08-03': { AM: '一', PM: '入', N: '' }, '2026-08-04': { AM: '明', PM: '明', N: '深夜' } },
   S2: { '2026-08-01': { AM: '夜', PM: '夜', N: '準夜' } }, S3: { '2026-08-05': { AM: '中 8:30-14:30', PM: '', N: '' } } };
 const r = vm.runInContext('exportPrint', ctx)('2026-08', cells, '事務 川又 8/12-14 有給');
-assert.ok(/format=pdf/.test(r.pdf) && /size=A3/.test(r.pdf) && /portrait=false/.test(r.pdf), 'A3横のPDF');
+assert.ok(/format=pdf/.test(r.pdf) && /size=A4/.test(r.pdf) && /portrait=false/.test(r.pdf) && /scale=4/.test(r.pdf), '既定はA4横・1枚に収める');
 const grid = written.find(w => w.r === 1 && w.c === 1 && w.v.length > 2).v;
 const row = name => grid.findIndex(x => x[0] === name);
 const col = d => 3 + d - 1;
@@ -53,6 +53,7 @@ assert.ok(written.some(w => String(w.v[0][0]).includes('川又')), '備考が入
 // 2回目（印刷用シートがすでにあり、列が固定されている）も作り直せる
 state.frozenCols = 3;
 written.length = 0;
-vm.runInContext('exportPrint', ctx)('2026-08', cells, '');
+const r2 = vm.runInContext('exportPrint', ctx)('2026-08', cells, '', 'A3');
 assert.ok(written.length > 0, '2回目も作成できる');
+assert.ok(/size=A3/.test(r2.pdf), 'A3も選べる');
 console.log('print tests passed');
