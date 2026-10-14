@@ -1,0 +1,58 @@
+name: 株モメンタム・アラート
+
+on:
+  schedule:
+    # 平日 22:30 UTC = 日本時間 翌朝7:30（米国の引け後。日本株もその日の終値が入っている）
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "alert（通常）/ backtest（過去検証）/ dry-run（通知しない）"
+        default: alert
+        type: choice
+        options: [alert, backtest, dry-run]
+
+concurrency:
+  group: stock-alert
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: stock-alert
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: stock-alert/requirements.txt
+      - run: pip install -r requirements.txt
+
+      # 通知済みの記録とニュース件数の履歴を、実行をまたいで引き継ぐ
+      - uses: actions/cache/restore@v4
+        with:
+          path: stock-alert/state/state.json
+          key: stock-alert-state-${{ github.run_id }}
+          restore-keys: stock-alert-state-
+
+      - name: アラート
+        if: github.event_name == 'schedule' || inputs.mode != 'backtest'
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          ALERT_TO: ${{ secrets.ALERT_TO }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python -m momentum_alert.main ${{ inputs.mode == 'dry-run' && '--dry-run' || '' }}
+
+      - name: バックテスト
+        if: inputs.mode == 'backtest'
+        run: python -m momentum_alert.backtest --period 3y | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/cache/save@v4
+        if: always() && hashFiles('stock-alert/state/state.json') != ''
+        with:
+          path: stock-alert/state/state.json
+          key: stock-alert-state-${{ github.run_id }}

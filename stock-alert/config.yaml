@@ -1,0 +1,70 @@
+# 監視するテーマと銘柄、アラートの条件
+# テーマを足すときは themes に同じ形で追加するだけでよい。
+# 日本株は「コード.T」（例：7011.T）。ETF を etf に入れると、テーマ全体の上抜けも見る。
+# news は Googleニュースで検索する言葉。記事数が急に増えたら「話題急増」として知らせる。
+
+benchmarks:
+  us: SPY      # 米国株の比較対象（S&P500）
+  jp: 1306.T   # 日本株の比較対象（TOPIX連動ETF）
+
+thresholds:
+  min_dollar_volume: 5000000   # 1日の売買代金の下限（ドル・円は自動換算しない。円は min_yen_volume）
+  min_yen_volume: 300000000    # 日本株の売買代金の下限（円）
+  alert_score: 60              # この点数以上で銘柄アラート
+  watch_score: 45              # テーマの「広がり」に数える点数
+  early_max_ret20: 15          # 「初動」とみなす20日上昇率の上限（%）
+  early_max_ext50: 12          # 「初動」とみなす50日線からの乖離の上限（%）
+  late_ret20: 30               # 20日でこれ以上上がっていたら「過熱」
+  late_ext50: 25               # 50日線からこれ以上離れていたら「過熱」
+  late_rsi: 78                 # RSI がこれ以上で、20日上昇率が初動の範囲を超えていたら「過熱」
+  theme_breadth: 0.4           # テーマ内でシグナルが出ている銘柄の割合
+  theme_min_rs10: 2            # テーマの10日超過リターン（中央値, %）
+  cooldown_days: 10            # 同じ銘柄・同じ段階を再通知するまでの日数
+  news_surge: 2.0              # ニュース件数が普段（過去7日の1日平均）の何倍で「話題急増」とするか
+  news_min_count: 5            # 「話題急増」とみなす直近24時間の最低件数
+
+themes:
+  サイバーセキュリティ(米):
+    news: ["cybersecurity stocks", "ransomware attack", "cyberattack"]
+    etf: [CIBR, HACK, BUG]
+    tickers: [CRWD, PANW, ZS, FTNT, NET, S, OKTA, CYBR, TENB, QLYS, RPD, VRNS, CHKP]
+  AI半導体(米):
+    news: ["AI chip demand", "semiconductor stocks", "Nvidia"]
+    etf: [SMH, SOXX]
+    tickers: [NVDA, AMD, AVGO, MRVL, ARM, MU, TSM, ASML, LRCX, AMAT, KLAC, ALAB]
+  AIソフト・データ(米):
+    news: ["enterprise AI software", "AI agents software stocks"]
+    etf: [IGV]
+    tickers: [PLTR, SNOW, DDOG, MDB, NOW, CRM, ORCL, ESTC, PATH, AI]
+  電力・原子力(米):
+    news: ["nuclear power stocks", "data center power demand", "small modular reactor"]
+    etf: [URA, NLR]
+    tickers: [CEG, VST, OKLO, SMR, CCJ, LEU, BWXT, GEV, ETN, TLN]
+  量子コンピュータ(米):
+    news: ["quantum computing stocks", "quantum computer breakthrough"]
+    etf: [QTUM]
+    tickers: [IONQ, RGTI, QBTS, QUBT, IBM, HON]
+  宇宙・防衛(米):
+    news: ["defense stocks", "space stocks", "defense budget"]
+    etf: [ITA, UFO]
+    tickers: [RKLB, ASTS, LUNR, PL, KTOS, AVAV, LMT, NOC, RTX, PLTR]
+  ロボティクス・自動化(米):
+    news: ["humanoid robot", "robotics stocks"]
+    etf: [BOTZ, ROBO]
+    tickers: [ISRG, TER, ROK, SYM, PATH, TSLA]
+  バイオ(米):
+    news: ["biotech stocks", "FDA approval"]
+    etf: [XBI, IBB]
+    tickers: [VRTX, REGN, ALNY, ARGX, INSM, MRNA, CRSP, BEAM, NTLA, EXAS]
+  防衛・重工(日):
+    news: ["防衛費", "防衛関連株"]
+    tickers: [7011.T, 7012.T, 7013.T, 6203.T, 6208.T, 7721.T]
+  半導体(日):
+    news: ["半導体関連株", "半導体 製造装置"]
+    tickers: [8035.T, 6857.T, 6920.T, 6146.T, 7735.T, 6526.T, 4063.T, 3436.T, 6323.T]
+  サイバーセキュリティ(日):
+    news: ["サイバー攻撃", "ランサムウェア", "セキュリティ関連株"]
+    tickers: [4704.T, 2326.T, 4493.T, 4417.T, 3857.T, 3042.T, 4475.T]
+  電線・電力設備(日):
+    news: ["電線株", "データセンター 電力", "送電網"]
+    tickers: [5803.T, 5801.T, 5802.T, 6501.T, 6503.T, 1963.T]
