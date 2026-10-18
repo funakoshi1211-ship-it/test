@@ -4,6 +4,7 @@
 Googleスプレッドシートにデータを保存し、GAS（Google Apps Script）の画面をURLで開いて使います。費用はかかりません。
 
 - 仕様：[docs/SPEC.md](docs/SPEC.md)
+- 別のツール：テーマ株の初動を知らせる「テーマレーダー」は [stock-radar/](stock-radar/README.md) にあります（シフト作成ツールとは無関係）
 - プログラム：`gas/` フォルダ（編集用）、`dist/` フォルダ（貼り付け用。`tools/build.js` で生成）
 
 ## 使い方の流れ（毎月）
