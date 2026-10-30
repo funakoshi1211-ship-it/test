@@ -72,3 +72,7 @@ node test/print.test.js                 # 印刷用シートのテスト
 node tools/build.js                     # gas/ から貼り付け用の dist/ を作り直す
 node tools/build.js preview.html        # 仮名サンプルで動くデモ画面を1ファイルに書き出す
 ```
+
+## 別のツール
+
+- [テーマ株レーダー](theme-radar/README.md)：日本株のテーマ株の初動を毎日検知して、強いシグナルのときだけメールで知らせる
